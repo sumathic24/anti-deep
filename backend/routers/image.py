@@ -12,12 +12,15 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Detected file format (not the client-supplied content type) → saved extension
 ALLOWED_FORMATS = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp", "GIF": "gif"}
+MAX_UPLOAD_MB = 20
 
 
 @router.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)):
     """Detect if image is AI-generated using EfficientNet + ViT ensemble with GradCAM."""
     data = await file.read()
+    if len(data) > MAX_UPLOAD_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"The image is larger than {MAX_UPLOAD_MB} MB.")
     try:
         with Image.open(io.BytesIO(data)) as img:
             img.verify()

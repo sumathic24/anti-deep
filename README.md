@@ -18,7 +18,7 @@ DeepFakeShield is a production-quality multimodal AI detection platform that com
 
 - **NLP (RoBERTa + LinguaForge-X)** — AI-generated text detection
 - **Computer Vision (EfficientNet + ViT)** — AI-generated image detection
-- **Explainable AI (SHAP, LIME, GradCAM)** — Full reasoning transparency
+- **Explainable AI (SHAP, GradCAM)** — Full reasoning transparency
 - **Ensemble Learning** — Weighted prediction fusion for maximum accuracy
 
 Every prediction includes **full explainability on the same dashboard** — no separate pages.
@@ -253,7 +253,7 @@ python train_image_classifier.py \
 ### Text Analysis
 ```
 POST /api/text/analyze
-Body: { "text": "Your text here..." }
+Body: { "text": "Your text here...", "explain": true }   // explain=false skips SHAP (faster)
 
 Response:
 {
@@ -291,9 +291,11 @@ Response:
 }
 ```
 
-### Dashboard Stats
+### Dashboard & History
 ```
-GET /api/stats
+GET    /api/stats?days=7              # totals + per-day series for the last 7 (or 30) days
+GET    /api/history?limit=10&offset=0 # recorded analyses, newest first
+DELETE /api/history                   # delete all recorded analyses
 ```
 
 ---
@@ -330,7 +332,7 @@ docker-compose up --build
 
 **Models:** RoBERTa · LinguaForge-X · BERT · EfficientNet-B4 · ViT-B/16
 
-**XAI:** SHAP · LIME · GradCAM
+**XAI:** SHAP · GradCAM
 
 **Database:** SQLite (analysis history for the dashboard, `backend/data/history.db`)
 

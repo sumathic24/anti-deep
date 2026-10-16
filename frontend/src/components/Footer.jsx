@@ -1,24 +1,12 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Code2 } from 'lucide-react'
 import Logo from './Logo'
-import { checkHealth } from '../utils/api'
+import { useApiStatus } from '../utils/apiStatus'
 
 const REPO_URL = 'https://github.com/sumathic24/anti-deep'
 
 function ApiStatus() {
-  const [status, setStatus] = useState('checking') // checking | online | offline
-
-  useEffect(() => {
-    let cancelled = false
-    const check = () => checkHealth()
-      .then((ok) => !cancelled && setStatus(ok ? 'online' : 'offline'))
-      .catch(() => !cancelled && setStatus('offline'))
-    check()
-    const timer = setInterval(check, 30000)
-    return () => { cancelled = true; clearInterval(timer) }
-  }, [])
-
+  const { status } = useApiStatus()
   const { dot, label } = {
     checking: { dot: 'bg-fg-3', label: 'Checking API…' },
     online: { dot: 'bg-emerald-500', label: 'API online' },
@@ -34,7 +22,7 @@ function ApiStatus() {
 
 export default function Footer() {
   return (
-    <footer className="mt-auto border-t border-line">
+    <footer className="mt-auto border-t border-line print:hidden">
       <div className="container-page py-10">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2">

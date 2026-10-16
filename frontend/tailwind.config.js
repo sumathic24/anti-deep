@@ -1,4 +1,8 @@
 /** @type {import('tailwindcss').Config} */
+
+// Colors are CSS variables (see src/index.css) so the same classes work in light and dark mode.
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`
+
 export default {
   content: [
     "./index.html",
@@ -7,29 +11,30 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Surfaces (dark theme)
-        canvas: '#070b14',   // page background
-        surface: '#0d1320',  // cards
-        raised: '#121b2d',   // inputs, nested panels, hover
+        // Surfaces
+        canvas: v('canvas'),   // page background
+        surface: v('surface'), // cards
+        raised: v('raised'),   // inputs, nested panels, hover
         line: {
-          DEFAULT: '#1c2536', // hairline borders
-          strong: '#2a3549',
+          DEFAULT: v('line'),  // hairline borders
+          strong: v('line-strong'),
         },
         // Text
         fg: {
-          DEFAULT: '#e6eaf2',
-          2: '#a3acbf',
-          3: '#7c869a',
+          DEFAULT: v('fg'),
+          2: v('fg-2'),
+          3: v('fg-3'),
         },
         // Brand accent for interactive UI (buttons, links, focus)
         accent: {
-          DEFAULT: '#22d3ee',
-          hover: '#67e8f9',
-          ink: '#04111d',
+          DEFAULT: v('accent'),
+          hover: v('accent-hover'),
+          ink: v('accent-ink'),
         },
-        // Verdict colors — validated CVD-safe pair on the surface color
-        ai: { DEFAULT: '#e66767', text: '#fca5a5' },
-        human: { DEFAULT: '#3987e5', text: '#93c5fd' },
+        // Verdict colors — validated CVD-safe pairs for each theme's surface
+        ai: { DEFAULT: v('ai'), text: v('ai-text') },
+        human: { DEFAULT: v('human'), text: v('human-text') },
+        danger: { DEFAULT: v('danger'), ink: v('danger-ink') },
       },
       opacity: {
         3: '0.03',
@@ -38,9 +43,6 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-      },
-      maxWidth: {
-        '8xl': '88rem',
       },
     },
   },
