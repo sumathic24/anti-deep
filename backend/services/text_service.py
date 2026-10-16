@@ -15,6 +15,7 @@ import threading
 import time
 import numpy as np
 import shap
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from typing import Any, Dict, List
 
 # ── Try importing ML libraries (transformer models are optional) ──────────────
@@ -210,10 +211,15 @@ class TextAnalysisService:
                                      "score": round(score, 3), "label": label})
 
         # SHAP values are additive, so repeated words are summed into one feature.
+        # Common filler words ("the", "of", …) are left out of the ranked lists so they
+        # don't crowd out meaningful words; they still appear in token_importance.
         totals: Dict[str, float] = {}
         for word, val in zip(words, contribs):
-            totals[word.lower()] = totals.get(word.lower(), 0.0) + val
-        shap_values = sorted(({"feature": w, "shap": round(v, 4)} for w, v in totals.items()),
+            key = word.lower()
+            if len(key) > 1 and key not in ENGLISH_STOP_WORDS:
+                totals[key] = totals.get(key, 0.0) + val
+        # Words with no measurable effect (< 0.05 percentage points) are dropped from the ranking.
+        shap_values = sorted(({"feature": w, "shap": round(v, 4)} for w, v in totals.items() if abs(v) >= 5e-4),
                              key=lambda x: abs(x["shap"]), reverse=True)[:TOP_SHAP_FEATURES]
 
         suspicious = []
@@ -224,12 +230,13 @@ class TextAnalysisService:
                 "suspicious_phrases": suspicious}
 
     # ── Public API ────────────────────────────────────────────────────────────
-    def _analyze_sync(self, text: str) -> Dict[str, Any]:
+    def _analyze_sync(self, text: str, explain: bool = True) -> Dict[str, Any]:
         t0 = time.time()
         with self._lock:
             probas = {k: float(v[0]) for k, v in self._model_probas([text]).items()}
             ai_score = float(self._combine({k: np.array([v]) for k, v in probas.items()})[0])
-            tokens, values = self._explain(text)
+            # SHAP is the slow part on transformer models, so it can be skipped.
+            tokens, values = self._explain(text) if explain else ([], [])
 
         def model_entry(key):
             if key not in probas:
@@ -247,16 +254,17 @@ class TextAnalysisService:
             "linguaforge": model_entry("linguaforge"),
             "ensemble_strategy": ("meta_learner" if self.meta_learner is not None else "weighted_average") if is_ensemble else None,
             "ensemble_weight": self.weights if is_ensemble and self.meta_learner is None else None,
+            "explained": explain,
             **self._build_explanations(tokens, values, ai_score),
             "processing_time_ms": int((time.time() - t0) * 1000),
         }
 
-    async def analyze_ai_text(self, text: str) -> Dict[str, Any]:
-        """AI-generated text detection with SHAP explanations."""
+    async def analyze_ai_text(self, text: str, explain: bool = True) -> Dict[str, Any]:
+        """AI-generated text detection, with SHAP explanations unless explain=False."""
         if not self.available:
             raise ModelUnavailableError(
                 "No AI text detection model is available on the server. Run "
                 "`python download_models.py` in the backend folder, train a model (see README), "
                 "or restore models/saved/fast_text_model.pkl.")
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._analyze_sync, text)
+        return await loop.run_in_executor(None, self._analyze_sync, text, explain)
