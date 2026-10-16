@@ -1,178 +1,143 @@
 import { motion } from 'framer-motion'
-import { Shield, Database, Cpu, BookOpen, Globe, Award } from 'lucide-react'
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.5, delay: i * 0.08 } }),
-}
-
-const datasets = [
-  { name: 'LIAR Dataset', type: 'Text · Fake News', samples: '12,791', color: '#22d3ee' },
-  { name: 'HC3 Dataset', type: 'Text · AI vs Human', samples: '58,000+', color: '#a78bfa' },
-  { name: 'GPT-Wiki-Intro', type: 'Text · AI Generated', samples: '150,000+', color: '#22d3ee' },
-  { name: 'OpenAI Human vs AI', type: 'Text · Classification', samples: '500,000+', color: '#fb7185' },
-  { name: 'CIFAKE', type: 'Image · AI vs Real', samples: '120,000', color: '#a78bfa' },
-  { name: 'DiffusionDB', type: 'Image · Stable Diffusion', samples: '2,000,000+', color: '#22d3ee' },
-  { name: 'AI Generated Images', type: 'Image · Multi-GAN', samples: '80,000+', color: '#fb7185' },
-]
+import { ShieldCheck, Cpu, Database, BookOpen, Layers, Award } from 'lucide-react'
+import { PageHeader, fadeIn } from '../components/ui'
 
 const models = [
-  { name: 'RoBERTa', role: 'AI Text Detection', type: 'NLP Transformer', acc: '95.8%', color: '#22d3ee' },
-  { name: 'LinguaForge-X', role: 'Linguistic Pattern Analysis', type: 'Custom BERT', acc: '94.6%', color: '#a78bfa' },
-  { name: 'Ensemble (R+L)', role: 'Final Text Verdict', type: 'Weighted Fusion', acc: '97.4%', color: '#fb7185' },
-  { name: 'BERT Fake News', role: 'Misinformation Detection', type: 'Fine-tuned BERT', acc: '93.2%', color: '#22d3ee' },
-  { name: 'EfficientNet-B4', role: 'Image Classification', type: 'CNN', acc: '96.2%', color: '#a78bfa' },
-  { name: 'ViT-B/16', role: 'Vision Transformer', type: 'Transformer', acc: '95.8%', color: '#fb7185' },
+  { name: 'RoBERTa', role: 'AI text detection', type: 'Transformer (fine-tuned)', acc: '95.8%' },
+  { name: 'LinguaForge-X', role: 'Linguistic pattern analysis', type: 'BERT + linguistic features', acc: '94.6%' },
+  { name: 'Ensemble (R + L)', role: 'Final text verdict', type: 'Weighted fusion / meta-learner', acc: '97.4%' },
+  { name: 'EfficientNet-B4', role: 'AI image detection', type: 'CNN', acc: '96.2%' },
+  { name: 'ViT-B/16', role: 'AI image detection', type: 'Vision transformer', acc: '95.8%' },
+]
+
+const datasets = [
+  { name: 'HC3', type: 'Text · AI vs human', samples: '58,000+' },
+  { name: 'GPT-Wiki-Intro', type: 'Text · AI-generated', samples: '150,000+' },
+  { name: 'OpenAI Human vs AI', type: 'Text · classification', samples: '500,000+' },
+  { name: 'CIFAKE', type: 'Image · AI vs real', samples: '120,000' },
+  { name: 'DiffusionDB', type: 'Image · Stable Diffusion', samples: '2,000,000+' },
+  { name: 'AI Generated Images', type: 'Image · multi-GAN', samples: '80,000+' },
 ]
 
 const xaiTools = [
-  { name: 'SHAP', desc: 'SHapley Additive exPlanations — computes exact feature contributions for each prediction.', color: '#fb7185' },
-  { name: 'LIME', desc: 'Local Interpretable Model-agnostic Explanations — approximates model decisions locally.', color: '#a78bfa' },
-  { name: 'GradCAM', desc: 'Gradient-weighted Class Activation Mapping — highlights image regions driving predictions.', color: '#22d3ee' },
+  { name: 'SHAP', desc: 'SHapley Additive exPlanations — computes each word’s contribution to a text prediction.' },
+  { name: 'LIME', desc: 'Local Interpretable Model-agnostic Explanations — approximates model decisions locally.' },
+  { name: 'GradCAM', desc: 'Gradient-weighted Class Activation Mapping — highlights the image regions driving a prediction.' },
 ]
 
 const techStack = [
   { layer: 'Frontend', items: ['React 18', 'Tailwind CSS', 'Framer Motion', 'Recharts', 'Axios'] },
   { layer: 'Backend', items: ['FastAPI', 'Python 3.11', 'PyTorch 2.2', 'Transformers 4.40'] },
-  { layer: 'Models', items: ['RoBERTa', 'LinguaForge-X', 'EfficientNet', 'ViT-B/16', 'BERT'] },
-  { layer: 'XAI', items: ['SHAP 0.45', 'LIME 0.2', 'GradCAM', 'Attention Viz'] },
-  { layer: 'Database', items: ['MongoDB', 'Motor (async)'] },
+  { layer: 'Models', items: ['RoBERTa', 'LinguaForge-X', 'EfficientNet', 'ViT-B/16'] },
+  { layer: 'Explainability', items: ['SHAP 0.45', 'LIME 0.2', 'GradCAM'] },
+  { layer: 'Storage', items: ['SQLite (analysis history)'] },
   { layer: 'DevOps', items: ['Docker', 'Docker Compose', 'Nginx'] },
 ]
 
+function Section({ icon: Icon, title, description, children }) {
+  return (
+    <motion.section variants={fadeIn} initial="hidden" whileInView="show" viewport={{ once: true }} className="mb-12">
+      <div className="mb-5">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-fg">
+          <Icon size={18} className="text-fg-3" /> {title}
+        </h2>
+        {description && <p className="mt-1 text-sm text-fg-3">{description}</p>}
+      </div>
+      {children}
+    </motion.section>
+  )
+}
+
 export default function About() {
   return (
-    <main className="relative z-10 pt-28 pb-20 px-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0} className="mb-16 text-center">
-          <p className="section-label mb-3">About the Project</p>
-          <h1 className="text-5xl font-black text-white mb-4">
-            <span className="gradient-text">DeepFakeShield</span>
-          </h1>
-          <p className="text-slate-400 max-w-3xl mx-auto leading-relaxed text-lg">
-            A multimodal AI detection platform built as a Final Year Major Project for B.Tech CSE (Data Science).
-            Combines NLP, Computer Vision, and Explainable AI to combat the growing threat of synthetic media and coordinated misinformation.
+    <main className="container-page flex-1 py-10 sm:py-12">
+      <PageHeader eyebrow="About the project" title="DeepFakeShield"
+        description="A multimodal detection platform built as a Final Year Major Project for B.Tech CSE (Data Science). It combines NLP, computer vision and explainable AI to counter synthetic media." />
+
+      <motion.div variants={fadeIn} initial="hidden" animate="show" custom={1} className="card mb-12 flex gap-4 p-6">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-raised">
+          <ShieldCheck size={18} className="text-accent" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-fg">Project objective</h2>
+          <p className="mt-2 text-sm leading-relaxed text-fg-2">
+            The rapid rise of AI-generated text and deepfake images threatens public trust, social stability and
+            democratic systems. Existing tools analyze text or media independently. DeepFakeShield brings both into one
+            platform — transformer-based NLP for text, CNN and vision-transformer models for images — and shows the
+            reasoning behind every verdict.
           </p>
-          <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
-            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: '#22d3ee' }}>
-            <Globe size={14} /> Aligned with SDG 16: Peace, Justice & Strong Institutions
-          </div>
-        </motion.div>
+        </div>
+      </motion.div>
 
-        {/* Objective */}
-        <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={0}
-          className="card mb-8"
-          style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.05), rgba(124,58,237,0.05))' }}>
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)' }}>
-              <Shield size={22} className="text-cyan-400" />
+      <Section icon={Cpu} title="Models"
+        description="Accuracy figures are the project's target performance; measure them on your own test split after training.">
+        <div className="card overflow-x-auto">
+          <table className="table-base min-w-[36rem]">
+            <thead><tr><th>Model</th><th>Role</th><th>Architecture</th><th className="text-right">Target accuracy</th></tr></thead>
+            <tbody>
+              {models.map((m) => (
+                <tr key={m.name}>
+                  <td className="font-medium text-fg">{m.name}</td>
+                  <td>{m.role}</td>
+                  <td>{m.type}</td>
+                  <td className="tabular text-right text-fg">{m.acc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      <Section icon={Database} title="Datasets">
+        <div className="card overflow-x-auto">
+          <table className="table-base min-w-[28rem]">
+            <thead><tr><th>Dataset</th><th>Modality</th><th className="text-right">Samples</th></tr></thead>
+            <tbody>
+              {datasets.map((d) => (
+                <tr key={d.name}>
+                  <td className="font-medium text-fg">{d.name}</td>
+                  <td>{d.type}</td>
+                  <td className="tabular text-right">{d.samples}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      <Section icon={BookOpen} title="Explainable AI">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {xaiTools.map((x) => (
+            <div key={x.name} className="card p-5">
+              <p className="font-semibold text-fg">{x.name}</p>
+              <p className="mt-2 text-sm leading-relaxed text-fg-2">{x.desc}</p>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-white mb-2">Project Objective</h2>
-              <p className="text-slate-400 leading-relaxed">
-                The rapid rise of AI-generated deepfakes and coordinated fake news has created a digital crisis threatening public trust,
-                social stability, and democratic systems. Existing tools analyze text or media independently, failing to capture the
-                complete misinformation ecosystem. DeepFakeShield builds a unified multimodal detection platform analyzing text using
-                transformer-based NLP, images using CNN/ViT models, detecting misinformation patterns, and providing explainable
-                reasoning — all in one interface.
-              </p>
+          ))}
+        </div>
+      </Section>
+
+      <Section icon={Layers} title="Technology stack">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+          {techStack.map((t) => (
+            <div key={t.layer} className="card p-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-fg-3">{t.layer}</p>
+              <ul className="space-y-1.5 text-sm text-fg-2">
+                {t.items.map((item) => <li key={item}>{item}</li>)}
+              </ul>
             </div>
-          </div>
-        </motion.div>
+          ))}
+        </div>
+      </Section>
 
-        {/* Models */}
-        <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={0} className="mb-10">
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <Cpu size={20} className="text-violet-400" /> AI Models
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {models.map((m, i) => (
-              <motion.div key={m.name} variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={i * 0.1}
-                className="p-4 rounded-xl transition-all hover:scale-[1.02]"
-                style={{ background: `${m.color}06`, border: `1px solid ${m.color}20` }}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-bold text-white text-sm">{m.name}</p>
-                  <span className="text-xs font-black" style={{ color: m.color }}>{m.acc}</span>
-                </div>
-                <p className="text-xs text-slate-300 mb-1">{m.role}</p>
-                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: `${m.color}15`, color: m.color }}>{m.type}</span>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Datasets */}
-        <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={0} className="mb-10">
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <Database size={20} className="text-cyan-400" /> Datasets
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {datasets.map((d, i) => (
-              <motion.div key={d.name} variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={i * 0.1}
-                className="p-4 rounded-xl flex items-center gap-3"
-                style={{ background: `${d.color}06`, border: `1px solid ${d.color}20` }}>
-                <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                <div>
-                  <p className="font-semibold text-white text-sm">{d.name}</p>
-                  <p className="text-xs text-slate-400">{d.type}</p>
-                  <p className="text-xs font-mono mt-0.5" style={{ color: d.color }}>{d.samples} samples</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* XAI */}
-        <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={0} className="mb-10">
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <BookOpen size={20} className="text-rose-400" /> Explainable AI (XAI)
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {xaiTools.map((x, i) => (
-              <motion.div key={x.name} variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={i * 0.1}
-                className="card">
-                <p className="text-2xl font-black mb-2" style={{ color: x.color }}>{x.name}</p>
-                <p className="text-sm text-slate-400 leading-relaxed">{x.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Tech Stack */}
-        <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={0} className="mb-10">
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <Cpu size={20} className="text-violet-400" /> Technology Stack
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {techStack.map((t, i) => (
-              <motion.div key={t.layer} variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={i * 0.1}
-                className="card p-4">
-                <p className="text-xs font-bold text-cyan-400 mb-3 uppercase tracking-wider">{t.layer}</p>
-                <div className="flex flex-col gap-1.5">
-                  {t.items.map(item => (
-                    <span key={item} className="text-xs text-slate-400">{item}</span>
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* SDG */}
-        <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} custom={0}
-          className="card text-center py-12"
-          style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.05), rgba(124,58,237,0.05))' }}>
-          <Award size={40} className="text-cyan-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">SDG 16 Alignment</h2>
-          <p className="text-slate-400 max-w-xl mx-auto leading-relaxed">
-            DeepFakeShield directly supports <strong className="text-white">Sustainable Development Goal 16</strong> —
-            Peace, Justice and Strong Institutions — by combating AI-generated misinformation that undermines
-            democratic processes, public trust, and social stability worldwide.
-          </p>
-        </motion.div>
-      </div>
+      <motion.section variants={fadeIn} initial="hidden" whileInView="show" viewport={{ once: true }}
+        className="card flex flex-col items-center px-6 py-10 text-center">
+        <Award size={28} className="mb-4 text-accent" />
+        <h2 className="text-lg font-semibold text-fg">SDG 16 alignment</h2>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-fg-2">
+          DeepFakeShield supports <span className="text-fg">UN Sustainable Development Goal 16</span> — Peace, Justice and
+          Strong Institutions — by countering AI-generated misinformation that undermines democratic processes and public trust.
+        </p>
+      </motion.section>
     </main>
   )
 }

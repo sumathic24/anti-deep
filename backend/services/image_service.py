@@ -9,6 +9,7 @@ try:
     import torch.nn as nn
     from torchvision import transforms, models
     from PIL import Image
+    from services.pretrained import ImageDetector, IMAGE_MODEL_ID, load_detector
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -56,6 +57,7 @@ class GradCAMHook:
 
 class ImageAnalysisService:
     def __init__(self):
+        self.pretrained = None     # ImageDetector (Hugging Face)
         self.efficientnet = None
         self.vit = None
         self.eff_cam_hook = None
@@ -70,7 +72,12 @@ class ImageAnalysisService:
             print("[ImageService] PyTorch not available — using mock inference.")
             self.using_mock = True
             return
-            
+
+        # A downloaded pre-trained Hub detector takes priority over locally trained models.
+        self.pretrained = load_detector(ImageDetector, IMAGE_MODEL_ID, "ImageService")
+        if self.pretrained:
+            return
+
         try:
             if os.path.exists(EFFICIENTNET_PATH) and os.path.exists(VIT_PATH):
                 self.efficientnet = models.efficientnet_b4(weights=None)
@@ -145,92 +152,58 @@ class ImageAnalysisService:
             })
         return regions
 
-    def _mock_inference(self, filepath: str) -> tuple:
-        """Heuristic fallback analyzing EXIF and image resolution."""
-        eff_score = 0.15
-        vit_score = 0.15
-        regions = []
-        
-        if filepath and os.path.exists(filepath):
-            try:
-                with Image.open(filepath) as img:
-                    exif = img.getexif()
-                    if not exif:
-                        eff_score += 0.45 
-                        vit_score += 0.45
-                        
-                    w, h = img.size
-                    if (w == 512 and h == 512) or (w == 1024 and h == 1024) or (w == h and w % 64 == 0):
-                        eff_score += 0.30
-                        vit_score += 0.30
-            except Exception:
-                pass
-
-        eff_score = float(np.clip(eff_score + np.random.normal(0, 0.02), 0.01, 0.99))
-        vit_score = float(np.clip(vit_score + np.random.normal(0, 0.02), 0.01, 0.99))
-        
-        if eff_score > 0.5:
-            regions = self._generate_gradcam_regions(eff_score)
-            
-        return eff_score, vit_score, regions
-
-    def _generate_gradcam_regions(self, ai_score: float) -> List[Dict]:
-        """Mock regions for the fallback mode."""
-        regions = []
-        labels = ["Texture inconsistency", "Edge artifact", "Lighting mismatch"]
-        for i in range(2):
-            regions.append({
-                "x": int(np.random.uniform(10, 50)),
-                "y": int(np.random.uniform(10, 50)),
-                "w": int(np.random.uniform(20, 30)),
-                "h": int(np.random.uniform(20, 30)),
-                "intensity": round(float(np.random.uniform(0.6, 0.95)), 2),
-                "label": labels[i % len(labels)],
-            })
-        return regions
-
-    def _detect_artifacts(self, ai_score: float) -> List[str]:
-        all_artifacts = ["GAN frequency artifacts", "Unnatural texture", "Blending boundary artifacts"]
-        return all_artifacts[:2] if ai_score > 0.5 else []
+    def _heuristic_inference(self, filepath: str) -> tuple:
+        """Fallback when no trained CNN is available: a deterministic metadata heuristic.
+        Returns (ai_score, signals) where signals lists the checks that fired."""
+        score = 0.15
+        signals = []
+        with Image.open(filepath) as img:
+            if not img.getexif():
+                score += 0.45
+                signals.append("No camera EXIF metadata")
+            w, h = img.size
+            if w == h and w % 64 == 0:
+                score += 0.30
+                signals.append(f"Square {w}×{h} size, a multiple of 64 (typical of AI generators)")
+        return score, signals
 
     async def analyze_image(self, filepath: str) -> Dict[str, Any]:
         t0 = time.time()
         gradcam_regions = []
+        signals = []
+        eff_entry = vit_entry = None
 
-        if not self.using_mock and self.efficientnet and self.vit:
-            model_used = "EfficientNet + ViT Ensemble"
-            loop = asyncio.get_event_loop()
+        if self.pretrained:
+            model_used = f"{self.pretrained.model_id} (pre-trained)"
+            loop = asyncio.get_running_loop()
+            ensemble_score = await loop.run_in_executor(None, self.pretrained.predict, filepath)
+        elif not self.using_mock and self.efficientnet and self.vit:
+            model_used = "EfficientNet-B4 + ViT-B/16 ensemble"
+            loop = asyncio.get_running_loop()
             tensor = self._preprocess_image(filepath)
-            
+
             eff_result, vit_score = await asyncio.gather(
                 loop.run_in_executor(None, self._run_efficientnet, tensor),
                 loop.run_in_executor(None, self._run_vit, tensor)
             )
             eff_score, gradcam_regions = eff_result
+            ensemble_score = (eff_score * 0.5) + (vit_score * 0.5)
+            eff_entry = {"prediction": "AI Generated" if eff_score > 0.5 else "Real",
+                         "confidence": round(eff_score, 4)}
+            vit_entry = {"prediction": "AI Generated" if vit_score > 0.5 else "Real",
+                         "confidence": round(vit_score, 4)}
         else:
-            model_used = "Mock/Fast Heuristic Model"
-            await asyncio.sleep(0.5)
-            eff_score, vit_score, gradcam_regions = self._mock_inference(filepath)
-
-        ensemble_score = (eff_score * 0.5) + (vit_score * 0.5)
-        real_score = 1.0 - ensemble_score
-        artifacts = self._detect_artifacts(ensemble_score) if ensemble_score > 0.5 else []
-        elapsed_ms = int((time.time() - t0) * 1000)
+            model_used = "Metadata heuristic (no trained image model found)"
+            ensemble_score, signals = self._heuristic_inference(filepath)
 
         return {
             "prediction": "AI Generated" if ensemble_score > 0.5 else "Real Image",
             "ai_confidence": round(ensemble_score, 4),
-            "real_confidence": round(real_score, 4),
+            "real_confidence": round(1.0 - ensemble_score, 4),
             "model_used": model_used,
-            "efficientnet": {
-                "prediction": "AI Generated" if eff_score > 0.5 else "Real",
-                "confidence": round(eff_score, 4),
-            },
-            "vit": {
-                "prediction": "AI Generated" if vit_score > 0.5 else "Real",
-                "confidence": round(vit_score, 4),
-            },
+            "efficientnet": eff_entry,
+            "vit": vit_entry,
             "gradcam_regions": gradcam_regions,
-            "artifacts_detected": artifacts,
-            "processing_time_ms": elapsed_ms,
+            "signals": signals,
+            "processing_time_ms": int((time.time() - t0) * 1000),
         }

@@ -16,7 +16,7 @@
 
 DeepFakeShield is a production-quality multimodal AI detection platform that combines:
 
-- **NLP (RoBERTa + LinguaForge-X)** — AI-generated text & fake news detection
+- **NLP (RoBERTa + LinguaForge-X)** — AI-generated text detection
 - **Computer Vision (EfficientNet + ViT)** — AI-generated image detection
 - **Explainable AI (SHAP, LIME, GradCAM)** — Full reasoning transparency
 - **Ensemble Learning** — Weighted prediction fusion for maximum accuracy
@@ -28,7 +28,7 @@ Every prediction includes **full explainability on the same dashboard** — no s
 ## 🏗️ Project Structure
 
 ```
-DeepFakeShield/
+anti-deep/
 ├── frontend/                    # React + Vite + Tailwind + Framer Motion
 │   ├── src/
 │   │   ├── pages/
@@ -36,23 +36,30 @@ DeepFakeShield/
 │   │   │   ├── Dashboard.jsx    # Analytics, charts, recent analyses
 │   │   │   ├── TextAnalysis.jsx # Input → verdict + XAI + SHAP + ensemble
 │   │   │   ├── ImageAnalysis.jsx# Upload → verdict + GradCAM + model compare
-│   │   │   └── About.jsx        # Models, datasets, tech stack, SDG
+│   │   │   ├── About.jsx        # Models, datasets, tech stack, SDG
+│   │   │   └── NotFound.jsx     # 404 page
 │   │   ├── components/
 │   │   │   ├── Navbar.jsx
-│   │   │   └── Footer.jsx
+│   │   │   ├── Logo.jsx
+│   │   │   ├── Footer.jsx       # incl. live API status
+│   │   │   └── ui.jsx           # Shared UI (verdict card, alerts, collapsibles)
 │   │   └── utils/api.js         # Axios API calls
 │   └── package.json
 │
 ├── backend/                     # FastAPI + PyTorch
 │   ├── main.py                  # App entry + CORS
 │   ├── routers/
-│   │   ├── text.py              # /api/text/analyze, /api/text/fake-news
+│   │   ├── text.py              # /api/text/analyze
 │   │   ├── image.py             # /api/image/analyze
-│   │   └── stats.py             # /api/stats
+│   │   └── stats.py             # /api/stats (from recorded history)
 │   ├── services/
-│   │   ├── text_service.py      # RoBERTa + LinguaForge-X ensemble
-│   │   └── image_service.py     # EfficientNet + ViT + GradCAM
+│   │   ├── text_service.py      # RoBERTa + LinguaForge-X ensemble + SHAP
+│   │   ├── linguaforge.py       # LinguaForge-X model definition
+│   │   ├── image_service.py     # EfficientNet + ViT + GradCAM
+│   │   ├── pretrained.py        # Pre-trained Hugging Face detectors (text + image)
+│   │   └── history.py           # SQLite analysis history (data/history.db)
 │   ├── models/saved/            # Trained model weights (after training)
+│   ├── download_models.py       # Downloads the pre-trained detectors
 │   └── requirements.txt
 │
 ├── training/                    # Model training scripts
@@ -60,10 +67,8 @@ DeepFakeShield/
 │   ├── train_roberta.py         # Fine-tune RoBERTa for AI text detection
 │   ├── train_linguaforge.py     # Train LinguaForge-X (BERT + linguistic features)
 │   ├── train_ensemble.py        # Grid search + meta-learner ensemble fusion
-│   ├── train_fakenews.py        # BERT fake news classifier
 │   └── train_image_classifier.py# EfficientNet / ViT image classifier
 │
-├── docs/                        # Documentation
 ├── docker-compose.yml
 └── README.md
 ```
@@ -81,8 +86,8 @@ DeepFakeShield/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/DeepFakeShield.git
-cd DeepFakeShield
+git clone https://github.com/sumathic24/anti-deep.git
+cd anti-deep
 ```
 
 ### 2. Frontend Setup
@@ -114,8 +119,67 @@ uvicorn main:app --reload --port 8000
 Backend API at: **http://localhost:8000**
 API Docs at: **http://localhost:8000/docs**
 
-> **Note:** The backend works **without trained models** using realistic mock inference.
-> Train your models (see Training section) to enable real AI inference.
+> **Note:** Without trained models the backend falls back to simple models, and every
+> result says which model produced it:
+> - **Text:** the bundled fast model (`models/saved/fast_text_model.pkl`, bag-of-words + logistic regression).
+> - **Images:** a metadata heuristic (EXIF + image size). GradCAM needs the trained EfficientNet.
+>
+> For much better accuracy without training anything, download the pre-trained
+> detectors (next section), or train your own models (see Training section).
+
+---
+
+## ⬇️ Pre-trained Detectors (recommended)
+
+Instead of training from scratch, the backend can use detectors that are already trained and
+published on Hugging Face. They are **not** downloaded automatically — run this once:
+
+```bash
+cd backend
+venv\Scripts\activate                 # Windows  (source venv/bin/activate on Linux/Mac)
+python download_models.py --dry-run   # shows what will be downloaded (~590 MB in total)
+python download_models.py             # downloads the text + image detectors
+```
+
+Restart the backend; its log then shows `Pre-trained detector loaded: …`, and every result
+names the model that produced it. Use `--text` or `--image` to download only one of them.
+
+| Task | Default model | Download | License | Published results (by the authors) |
+|---|---|---|---|---|
+| AI text | [`Oxidane/tmr-ai-text-detector`](https://huggingface.co/Oxidane/tmr-ai-text-detector) — RoBERTa-base trained on the RAID benchmark | 503 MB | MIT | RAID leaderboard: AUROC 99.28% across all settings incl. adversarial attacks; 97.4% accuracy on a held-out RAID split |
+| AI image | [`buildborderless/CommunityForensics-DeepfakeDet-ViT`](https://huggingface.co/buildborderless/CommunityForensics-DeepfakeDet-ViT) — ViT-Small trained on 2.7M images from 4,803 generators ([Community Forensics paper](https://arxiv.org/abs/2411.04125)) | 87 MB | MIT | See the paper |
+
+**Other supported models** — set the environment variable, then download:
+
+| Model | Notes |
+|---|---|
+| `desklib/ai-text-detector-v1.01` | DeBERTa-v3-large; listed at the top of the RAID leaderboard on its model card. 1.7 GB and several times slower on CPU, so SHAP explanations take much longer. |
+| `fakespot-ai/roberta-base-ai-text-detection-v1` | RoBERTa-base by Mozilla Fakespot, Apache-2.0. |
+| `Hello-SimpleAI/chatgpt-detector-roberta` | Trained on HC3 (ChatGPT-3.5 answers, 2023) — weaker on newer AI models. |
+| `haywoodsloan/ai-image-detector-deploy` | SwinV2 image detector, Apache-2.0, regularly updated. |
+| `Organika/sdxl-detector` | Swin image detector, strong on SDXL images; CC BY-NC (non-commercial only). |
+
+```bash
+set TEXT_DETECTOR_MODEL=desklib/ai-text-detector-v1.01      # Windows (export ... on Linux/Mac)
+python download_models.py --text
+```
+
+Set `TEXT_DETECTOR_MODEL` or `IMAGE_DETECTOR_MODEL` to `none` to switch a pre-trained detector off.
+Most standard Hugging Face text/image classifiers work; check the backend log after switching.
+
+**Which model the backend uses:** a downloaded pre-trained detector → your own trained models
+(`models/saved/`) → the built-in fallback.
+
+**Good to know**
+- The accuracy figures above are the model authors' own results, not measured in this project.
+  Measure on your own held-out data before quoting numbers in a report.
+- All detectors get weaker on very short text, heavily edited or paraphrased text, and on AI models
+  released after the detector was trained.
+- SHAP explanations work with every text model. GradCAM heatmaps come only from the project's own
+  EfficientNet; the pre-trained image detector gives a verdict without a heatmap.
+- Docker: `docker compose exec backend python download_models.py` (kept in the `hf-cache` volume).
+- To free the space again, delete the `models--…` folders in the Hugging Face cache
+  (`~/.cache/huggingface/hub`, on Windows `C:\Users\<you>\.cache\huggingface\hub`).
 
 ---
 
@@ -132,7 +196,6 @@ python dataset_prep.py --output_dir ./data
 
 This will download and prepare:
 - HC3 Dataset (AI vs Human text)
-- LIAR Dataset (fake news)
 - CIFAKE (AI vs real images)
 
 ### Step 2 — Train Text Models
@@ -155,12 +218,6 @@ python train_ensemble.py \
     --roberta_dir ../backend/models/saved/roberta_ai_detector \
     --lingua_dir ../backend/models/saved/linguaforge_detector \
     --data_path ./data/text/ai_human.jsonl
-
-# Train Fake News Classifier
-python train_fakenews.py \
-    --data_path ./data/text/fakenews.jsonl \
-    --output_dir ../backend/models/saved/fakenews_classifier \
-    --epochs 5
 ```
 
 ### Step 3 — Train Image Models
@@ -186,7 +243,6 @@ python train_image_classifier.py \
 | RoBERTa | AI Text Detection | 95.8% | 0.956 |
 | LinguaForge-X | AI Text Detection | 94.6% | 0.944 |
 | **Ensemble (R+L)** | **AI Text Detection** | **97.4%** | **0.972** |
-| BERT | Fake News | 93.2% | 0.930 |
 | EfficientNet-B4 | AI Image | 96.2% | 0.960 |
 | ViT-B/16 | AI Image | 95.8% | 0.956 |
 
@@ -204,12 +260,13 @@ Response:
   "prediction": "AI Generated",
   "ai_confidence": 0.8742,
   "human_confidence": 0.1258,
-  "fake_news_score": 0.5431,
-  "roberta": { "prediction": "AI Generated", "ai_confidence": 0.8912 },
-  "linguaforge": { "prediction": "AI Generated", "ai_confidence": 0.8571 },
+  "model_used": "RoBERTa + LinguaForge-X ensemble",
+  "roberta": { "prediction": "AI Generated", "ai_confidence": 0.8912 },      // null if not loaded
+  "linguaforge": { "prediction": "AI Generated", "ai_confidence": 0.8571 },  // null if not loaded
+  "ensemble_strategy": "weighted_average",
   "ensemble_weight": { "roberta": 0.55, "linguaforge": 0.45 },
-  "token_importance": [...],
-  "shap_values": [...],
+  "token_importance": [{ "token": "...", "shap": 0.105, "score": 0.76, "label": "ai" }],
+  "shap_values": [{ "feature": "...", "shap": 0.105 }],
   "suspicious_phrases": [...],
   "processing_time_ms": 412
 }
@@ -218,17 +275,18 @@ Response:
 ### Image Analysis
 ```
 POST /api/image/analyze
-Body: multipart/form-data (file: image)
+Body: multipart/form-data (file: JPG, PNG, WEBP or GIF image)
 
 Response:
 {
   "prediction": "AI Generated",
   "ai_confidence": 0.9123,
   "real_confidence": 0.0877,
-  "efficientnet": { "prediction": "AI Generated", "confidence": 0.9201 },
-  "vit": { "prediction": "AI Generated", "confidence": 0.9045 },
+  "model_used": "EfficientNet-B4 + ViT-B/16 ensemble",
+  "efficientnet": { "prediction": "AI Generated", "confidence": 0.9201 },  // null in heuristic mode
+  "vit": { "prediction": "AI Generated", "confidence": 0.9045 },           // null in heuristic mode
   "gradcam_regions": [...],
-  "artifacts_detected": [...],
+  "signals": [...],  // heuristic checks that fired (heuristic mode only)
   "processing_time_ms": 847
 }
 ```
@@ -257,7 +315,6 @@ docker-compose up --build
 | Dataset | Type | Samples | Source |
 |---|---|---|---|
 | HC3 | AI vs Human Text | 58,000+ | HuggingFace |
-| LIAR | Fake News (6-class) | 12,791 | HuggingFace |
 | GPT-Wiki-Intro | AI Generated | 150,000+ | HuggingFace |
 | OpenAI Human vs AI | Classification | 500,000+ | OpenAI |
 | CIFAKE | AI vs Real Images | 120,000 | HuggingFace |
@@ -275,7 +332,7 @@ docker-compose up --build
 
 **XAI:** SHAP · LIME · GradCAM
 
-**Database:** MongoDB (optional, for analysis history)
+**Database:** SQLite (analysis history for the dashboard, `backend/data/history.db`)
 
 ---
 

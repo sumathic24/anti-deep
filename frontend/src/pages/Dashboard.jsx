@@ -1,232 +1,272 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { BarChart3, FileText, Image, Shield, TrendingUp, Activity, AlertTriangle, CheckCircle } from 'lucide-react'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Link } from 'react-router-dom'
+import { FileText, Image as ImageIcon, Activity, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Gauge } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { getDashboardStats, getErrorMessage } from '../utils/api'
+import { PageHeader, Alert, EmptyState, VerdictBadge, VERDICT_COLORS, fadeIn } from '../components/ui'
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.5, delay: i * 0.08 } }),
+const SURFACE = '#0d1320'
+const SERIES = [
+  { key: 'human', label: 'Human / real', color: VERDICT_COLORS.human.mark },
+  { key: 'ai', label: 'AI-generated', color: VERDICT_COLORS.ai.mark },
+]
+const BREAKDOWN = [
+  { key: 'ai_text', label: 'AI-generated text', kind: 'text', isAI: true },
+  { key: 'human_text', label: 'Human-written text', kind: 'text', isAI: false },
+  { key: 'ai_image', label: 'AI-generated image', kind: 'image', isAI: true },
+  { key: 'real_image', label: 'Real image', kind: 'image', isAI: false },
+]
+
+const formatDate = (date) =>
+  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+const formatDateTime = (createdAt) =>
+  new Date(createdAt.replace(' ', 'T')).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+/** Stacked segment: 4px rounded data-end on the top-most non-empty segment only. */
+function Segment({ x, y, width, height, fill, payload, seriesKey }) {
+  if (!height || height <= 0) return null
+  const isTop = seriesKey === 'ai' || !payload.ai
+  const r = isTop ? Math.min(4, height, width / 2) : 0
+  const d = `M${x},${y + height} V${y + r} Q${x},${y} ${x + r},${y} H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${y + height} Z`
+  // The surface-colored stroke leaves a 2px gap between touching segments.
+  return <path d={d} fill={fill} stroke={SURFACE} strokeWidth={2} />
 }
 
-const areaData = [
-  { day: 'Mon', text: 42, image: 18 }, { day: 'Tue', text: 67, image: 32 },
-  { day: 'Wed', text: 55, image: 25 }, { day: 'Thu', text: 89, image: 41 },
-  { day: 'Fri', text: 73, image: 38 }, { day: 'Sat', text: 94, image: 52 },
-  { day: 'Sun', text: 81, image: 44 },
-]
+function WeeklyTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div className="rounded-lg border border-line-strong bg-raised px-3 py-2.5 text-xs shadow-xl">
+      <p className="mb-2 text-fg-3">{formatDate(d.date)}</p>
+      {[...SERIES].reverse().map((s) => (
+        <p key={s.key} className="flex items-center gap-2 py-0.5">
+          <span className="h-0.5 w-3 rounded-full" style={{ background: s.color }} />
+          <span className="tabular w-5 font-semibold text-fg">{d[s.key]}</span>
+          <span className="text-fg-3">{s.label}</span>
+        </p>
+      ))}
+    </div>
+  )
+}
 
-const barData = [
-  { name: 'AI Text', value: 68, color: '#22d3ee' },
-  { name: 'Human', value: 32, color: '#a78bfa' },
-  { name: 'Fake News', value: 45, color: '#fb7185' },
-  { name: 'Real News', value: 55, color: '#22d3ee' },
-  { name: 'AI Image', value: 71, color: '#fb7185' },
-  { name: 'Real Image', value: 29, color: '#a78bfa' },
-]
-
-const pieData = [
-  { name: 'AI-Generated Text', value: 38, color: '#22d3ee' },
-  { name: 'Fake News', value: 27, color: '#fb7185' },
-  { name: 'AI Image', value: 21, color: '#a78bfa' },
-  { name: 'Human Content', value: 14, color: '#64748b' },
-]
-
-const recentAnalyses = [
-  { type: 'text', label: '"Scientists discover new black hole…"', result: 'AI Generated', confidence: 94.2, color: '#fb7185', icon: FileText },
-  { type: 'image', label: 'portrait_photo.jpg', result: 'AI Image', confidence: 88.7, color: '#fb7185', icon: Image },
-  { type: 'text', label: '"Breaking: Local government passes bill…"', result: 'Fake News', confidence: 91.3, color: '#f97316', icon: FileText },
-  { type: 'text', label: '"The study involved 200 participants…"', result: 'Human Written', confidence: 82.1, color: '#22d3ee', icon: FileText },
-  { type: 'image', label: 'landscape_mountain.png', result: 'Real Image', confidence: 96.4, color: '#22d3ee', icon: Image },
-]
-
-const topStats = [
-  { label: 'Total Analyses', value: '1,247', change: '+12%', icon: Activity, color: '#22d3ee' },
-  { label: 'AI Content Detected', value: '847', change: '+8%', icon: AlertTriangle, color: '#fb7185' },
-  { label: 'Avg Confidence', value: '91.3%', change: '+2.1%', icon: TrendingUp, color: '#a78bfa' },
-  { label: 'Verified Real', value: '400', change: '+4%', icon: CheckCircle, color: '#22d3ee' },
-]
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="glass-strong rounded-xl px-4 py-3 text-xs">
-        <p className="text-slate-400 mb-1">{label}</p>
-        {payload.map((p) => (
-          <p key={p.dataKey} style={{ color: p.color }}>{p.dataKey}: <strong>{p.value}</strong></p>
-        ))}
+function StatTile({ label, value, sub, icon: Icon }) {
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-fg-2">{label}</p>
+        <Icon size={16} className="text-fg-3" />
       </div>
-    )
-  }
-  return null
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-fg">{value}</p>
+      {sub && <p className="mt-1 text-xs text-fg-3">{sub}</p>}
+    </div>
+  )
+}
+
+function WeeklyChart({ weekly }) {
+  const [view, setView] = useState('chart')
+  return (
+    <div className="card p-5 sm:p-6 lg:col-span-2">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-fg">Verdicts in the last 7 days</h2>
+          <div className="mt-2 flex flex-wrap gap-4 text-xs text-fg-2">
+            {[...SERIES].reverse().map((s) => (
+              <span key={s.key} className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} /> {s.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex rounded-lg border border-line-strong p-0.5 text-xs" role="group" aria-label="View">
+          {['chart', 'table'].map((v) => (
+            <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v}
+              className={`rounded-md px-2.5 py-1 capitalize transition-colors ${view === v ? 'bg-white/10 text-fg' : 'text-fg-3 hover:text-fg'}`}>
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+      {view === 'chart' ? (
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={weekly} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+            <CartesianGrid vertical={false} stroke="#1c2536" />
+            <XAxis dataKey="day" tick={{ fill: '#7c869a', fontSize: 11 }} axisLine={{ stroke: '#2a3549' }} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fill: '#7c869a', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+            <Tooltip content={<WeeklyTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+            {SERIES.map((s) => (
+              <Bar key={s.key} dataKey={s.key} stackId="verdicts" fill={s.color} maxBarSize={24} isAnimationActive={false}
+                shape={(props) => <Segment {...props} seriesKey={s.key} />} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="table-base">
+            <thead><tr><th>Day</th><th className="text-right">AI-generated</th><th className="text-right">Human / real</th><th className="text-right">Total</th></tr></thead>
+            <tbody>
+              {weekly.map((d) => (
+                <tr key={d.date}>
+                  <td>{formatDate(d.date)}</td>
+                  <td className="tabular text-right">{d.ai}</td>
+                  <td className="tabular text-right">{d.human}</td>
+                  <td className="tabular text-right font-medium text-fg">{d.ai + d.human}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Breakdown({ stats }) {
+  return (
+    <div className="card p-5 sm:p-6">
+      <h2 className="font-semibold text-fg">Breakdown</h2>
+      <p className="mb-5 mt-1 text-xs text-fg-3">All analyses by verdict, with the model's average confidence</p>
+      <ul className="space-y-4">
+        {BREAKDOWN.map((b) => {
+          const count = stats.breakdown[b.key]
+          const share = stats.total_analyses ? count / stats.total_analyses : 0
+          const conf = stats.avg_confidence_by_type[b.key]
+          return (
+            <li key={b.key}>
+              <div className="mb-1.5 flex items-baseline justify-between gap-2 text-sm">
+                <span className="text-fg-2">{b.label}</span>
+                <span className="tabular text-fg">{count} <span className="text-xs text-fg-3">({Math.round(share * 100)}%)</span></span>
+              </div>
+              <div className="meter h-1.5">
+                <div className="h-full rounded-full bg-fg-3" style={{ width: `${share * 100}%` }} />
+              </div>
+              <p className="mt-1 text-xs text-fg-3">{conf == null ? 'No results yet' : `Avg confidence ${conf}%`}</p>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+function RecentTable({ recent }) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 sm:px-6">
+        <h2 className="font-semibold text-fg">Recent analyses</h2>
+        <Link to="/text-analysis" className="text-sm font-medium text-accent hover:underline">New analysis</Link>
+      </div>
+      {/* Phones: stacked list */}
+      <ul className="divide-y divide-line border-t border-line sm:hidden">
+        {recent.map((a, i) => (
+          <li key={i} className="px-5 py-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <VerdictBadge isAI={a.is_ai}>{a.prediction}</VerdictBadge>
+              <span className="tabular text-sm text-fg">{a.confidence}%</span>
+            </div>
+            <p className="truncate text-sm text-fg" title={a.label}>{a.kind === 'text' ? `“${a.label}”` : a.label}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-fg-3">
+              {a.kind === 'text' ? <FileText size={12} /> : <ImageIcon size={12} />}
+              {a.kind === 'text' ? 'Text' : 'Image'} · {formatDateTime(a.created_at)}
+            </p>
+          </li>
+        ))}
+      </ul>
+      {/* Larger screens: table */}
+      <div className="hidden overflow-x-auto border-t border-line sm:block">
+        <table className="table-base min-w-[40rem]">
+          <thead>
+            <tr><th>Type</th><th>Input</th><th>Verdict</th><th className="text-right">Confidence</th><th className="text-right">When</th></tr>
+          </thead>
+          <tbody>
+            {recent.map((a, i) => (
+              <tr key={i}>
+                <td>
+                  <span className="flex items-center gap-2 text-fg-2">
+                    {a.kind === 'text' ? <FileText size={14} /> : <ImageIcon size={14} />}
+                    {a.kind === 'text' ? 'Text' : 'Image'}
+                  </span>
+                </td>
+                <td className="max-w-[18rem] truncate text-fg" title={a.label}>{a.kind === 'text' ? `“${a.label}”` : a.label}</td>
+                <td><VerdictBadge isAI={a.is_ai}>{a.prediction}</VerdictBadge></td>
+                <td className="tabular text-right">{a.confidence}%</td>
+                <td className="tabular whitespace-nowrap text-right text-fg-3">{formatDateTime(a.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export default function Dashboard() {
-  const [animatedStats, setAnimatedStats] = useState(topStats.map(() => 0))
+  const [stats, setStats] = useState(null)
+  const [error, setError] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    const targets = [1247, 847, 91.3, 400]
-    targets.forEach((target, i) => {
-      let start = 0
-      const step = target / 40
-      const timer = setInterval(() => {
-        start = Math.min(start + step, target)
-        setAnimatedStats(prev => {
-          const next = [...prev]
-          next[i] = start
-          return next
-        })
-        if (start >= target) clearInterval(timer)
-      }, 20)
-    })
+  const load = useCallback(() => {
+    setRefreshing(true)
+    return getDashboardStats()
+      .then((data) => { setStats(data); setError(null) })
+      .catch((err) => setError(getErrorMessage(err)))
+      .finally(() => setRefreshing(false))
   }, [])
 
+  useEffect(() => { load() }, [load])
+
+  const hasData = stats && stats.total_analyses > 0
+
   return (
-    <main className="relative z-10 pt-28 pb-20 px-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0} className="mb-10">
-          <p className="section-label mb-2">Analytics Overview</p>
-          <h1 className="text-4xl font-bold text-white mb-2">
-            Detection <span className="gradient-text">Dashboard</span>
-          </h1>
-          <p className="text-slate-400">Real-time monitoring of all AI content detection activity.</p>
+    <main className="container-page flex-1 py-10 sm:py-12">
+      <PageHeader eyebrow="Analytics" title="Dashboard"
+        description="Every text and image analysis run on this server is recorded here."
+        actions={
+          <button type="button" className="btn-secondary" onClick={load} disabled={refreshing}>
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> Refresh
+          </button>
+        } />
+
+      {error && <div className="mb-6"><Alert>{error}</Alert></div>}
+
+      {!stats && !error && (
+        <div className="card flex items-center justify-center gap-3 py-24 text-sm text-fg-3" role="status">
+          <Loader2 size={18} className="animate-spin text-accent" /> Loading statistics…
+        </div>
+      )}
+
+      {stats && !hasData && (
+        <EmptyState icon={Activity} title="No analyses yet"
+          description="Run a text or image analysis and the results will show up here.">
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link to="/text-analysis" className="btn-primary"><FileText size={15} /> Analyze text</Link>
+            <Link to="/image-analysis" className="btn-secondary"><ImageIcon size={15} /> Analyze an image</Link>
+          </div>
+        </EmptyState>
+      )}
+
+      {hasData && (
+        <motion.div variants={fadeIn} initial="hidden" animate="show"
+          className={`flex flex-col gap-6 transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatTile label="Total analyses" value={stats.total_analyses.toLocaleString()} icon={Activity}
+              sub={`${stats.text_analyses} text · ${stats.image_analyses} image`} />
+            <StatTile label="AI-generated" value={stats.ai_content_detected.toLocaleString()} icon={AlertTriangle}
+              sub={`${Math.round(stats.ai_content_detected / stats.total_analyses * 100)}% of all analyses`} />
+            <StatTile label="Human / real" value={stats.verified_real.toLocaleString()} icon={CheckCircle2}
+              sub={`${Math.round(stats.verified_real / stats.total_analyses * 100)}% of all analyses`} />
+            <StatTile label="Average confidence" value={`${stats.avg_confidence}%`} icon={Gauge}
+              sub="In the predicted verdict" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <WeeklyChart weekly={stats.weekly} />
+            <Breakdown stats={stats} />
+          </div>
+
+          <RecentTable recent={stats.recent} />
         </motion.div>
-
-        {/* Top stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {topStats.map((s, i) => (
-            <motion.div key={s.label} variants={fadeUp} initial="hidden" animate="show" custom={i * 0.1}
-              className="card group">
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: `${s.color}18`, border: `1px solid ${s.color}30` }}>
-                  <s.icon size={18} style={{ color: s.color }} />
-                </div>
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee' }}>{s.change}</span>
-              </div>
-              <p className="text-2xl font-bold text-white">
-                {i === 2 ? animatedStats[i].toFixed(1) + '%' : Math.floor(animatedStats[i]).toLocaleString()}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">{s.label}</p>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Charts row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Area chart */}
-          <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0.5}
-            className="card lg:col-span-2">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <p className="text-white font-semibold">Analyses This Week</p>
-                <p className="text-xs text-slate-500 mt-1">Text vs Image detections</p>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-slate-400">
-                <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-cyan-400 inline-block rounded" /> Text</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-violet-400 inline-block rounded" /> Image</span>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={areaData}>
-                <defs>
-                  <linearGradient id="colorText" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorImage" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#a78bfa" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="text" stroke="#22d3ee" strokeWidth={2} fill="url(#colorText)" />
-                <Area type="monotone" dataKey="image" stroke="#a78bfa" strokeWidth={2} fill="url(#colorImage)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </motion.div>
-
-          {/* Pie chart */}
-          <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0.6} className="card">
-            <p className="text-white font-semibold mb-1">Content Breakdown</p>
-            <p className="text-xs text-slate-500 mb-4">All-time distribution</p>
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70}
-                  paddingAngle={4} dataKey="value">
-                  {pieData.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2 mt-2">
-              {pieData.map(d => (
-                <div key={d.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                    <span className="text-slate-400">{d.name}</span>
-                  </div>
-                  <span className="text-white font-medium">{d.value}%</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Bar chart + recent */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0.7} className="card">
-            <p className="text-white font-semibold mb-1">Model Detection Rate</p>
-            <p className="text-xs text-slate-500 mb-6">Percentage of each content type detected</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={barData} barSize={28}>
-                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {barData.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} fillOpacity={0.8} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </motion.div>
-
-          {/* Recent analyses */}
-          <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0.8} className="card">
-            <div className="flex items-center justify-between mb-6">
-              <p className="text-white font-semibold">Recent Analyses</p>
-              <Link to="/text-analysis" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
-                New analysis →
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {recentAnalyses.map((a, i) => (
-                <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.9 + i * 0.08 }}
-                  className="flex items-center gap-3 p-3 rounded-xl transition-colors hover:bg-white/3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${a.color}15` }}>
-                    <a.icon size={14} style={{ color: a.color }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-white font-medium truncate">{a.label}</p>
-                    <p className="text-[11px] text-slate-500">{a.type === 'text' ? 'Text' : 'Image'} · {a.confidence}% confidence</p>
-                  </div>
-                  <span className="text-[11px] font-semibold px-2 py-1 rounded-lg flex-shrink-0"
-                    style={{ background: `${a.color}15`, color: a.color }}>{a.result}</span>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </div>
+      )}
     </main>
   )
 }

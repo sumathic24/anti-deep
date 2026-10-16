@@ -2,12 +2,11 @@
 dataset_prep.py — Download and prepare all datasets for DeepFakeShield.
 
 Datasets:
-  Text:  HC3, LIAR, GPT-Wiki-Intro, OpenAI Human vs AI
+  Text:  HC3, GPT-Wiki-Intro, OpenAI Human vs AI
   Image: CIFAKE (HuggingFace), DiffusionDB subset
 
 Output format:
   data/text/ai_human.jsonl    — {"text": "...", "label": 0|1}
-  data/text/fakenews.jsonl    — {"text": "...", "label": 0|1}
   data/images/train/real/     — real images
   data/images/train/ai_generated/  — AI images
   data/images/val/  ...
@@ -53,31 +52,6 @@ def prepare_hc3(output_dir):
     except Exception as e:
         print(f"[HC3] Error: {e}. Install: pip install datasets")
         _create_sample_text_data(output_dir)
-
-
-def prepare_liar(output_dir):
-    """LIAR: 6-class → binary (true/mostly-true=0, others=1)"""
-    print("\n[LIAR] Preparing dataset...")
-    try:
-        from datasets import load_dataset
-        ds = load_dataset("liar", split="train")
-        TRUE_LABELS = {"true", "mostly-true", "half-true"}
-        records = []
-        for item in ds:
-            text  = item.get("statement", "")
-            label_str = item.get("label", "")
-            label = 0 if label_str in TRUE_LABELS else 1
-            if len(text.strip()) > 20:
-                records.append({"text": text.strip(), "label": label})
-        random.shuffle(records)
-        out = os.path.join(output_dir, "text", "fakenews.jsonl")
-        with open(out, "w", encoding="utf-8") as f:
-            for r in records:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        print(f"[LIAR] Saved {len(records)} samples → {out}")
-    except Exception as e:
-        print(f"[LIAR] Error: {e}")
-        _create_sample_fakenews_data(output_dir)
 
 
 def prepare_cifake(output_dir):
@@ -131,25 +105,11 @@ def _create_sample_text_data(output_dir):
     print(f"[Sample] Created {len(samples)} text samples → {out}")
 
 
-def _create_sample_fakenews_data(output_dir):
-    samples = [
-        {"text": "Scientists confirm groundbreaking discovery after years of rigorous peer-reviewed research.", "label": 0},
-        {"text": "Local officials announce new infrastructure project following community consultation.", "label": 0},
-        {"text": "SHOCKING: Government hiding cure that THEY don't want you to know about!", "label": 1},
-        {"text": "You won't believe what mainstream media is concealing from the public!", "label": 1},
-    ] * 200
-    random.shuffle(samples)
-    out = os.path.join(output_dir, "text", "fakenews.jsonl")
-    with open(out, "w") as f:
-        for s in samples: f.write(json.dumps(s) + "\n")
-    print(f"[Sample] Created {len(samples)} fakenews samples → {out}")
-
-
 def print_summary(output_dir):
     print("\n" + "="*50)
     print("DATASET PREPARATION SUMMARY")
     print("="*50)
-    for f in ["text/ai_human.jsonl", "text/fakenews.jsonl"]:
+    for f in ["text/ai_human.jsonl"]:
         path = os.path.join(output_dir, f)
         if os.path.exists(path):
             lines = sum(1 for _ in open(path))
@@ -166,14 +126,12 @@ def print_summary(output_dir):
 def main(args):
     make_dirs(args.output_dir)
     prepare_hc3(args.output_dir)
-    prepare_liar(args.output_dir)
     prepare_cifake(args.output_dir)
     print_summary(args.output_dir)
     print("\n[✓] Dataset preparation complete!")
     print("Next steps:")
     print("  python train_roberta.py --data_path ./data/text/ai_human.jsonl")
     print("  python train_linguaforge.py --data_path ./data/text/ai_human.jsonl")
-    print("  python train_fakenews.py --data_path ./data/text/fakenews.jsonl")
     print("  python train_image_classifier.py --data_dir ./data/images --model efficientnet")
     print("  python train_image_classifier.py --data_dir ./data/images --model vit")
     print("  python train_ensemble.py")
