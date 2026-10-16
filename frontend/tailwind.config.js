@@ -2,64 +2,46 @@
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,jsx}",
   ],
   theme: {
     extend: {
       colors: {
-        dark: {
-          950: '#04060f',
-          900: '#070d1a',
-          800: '#0d1526',
-          700: '#121d33',
-          600: '#192540',
+        // Surfaces (dark theme)
+        canvas: '#070b14',   // page background
+        surface: '#0d1320',  // cards
+        raised: '#121b2d',   // inputs, nested panels, hover
+        line: {
+          DEFAULT: '#1c2536', // hairline borders
+          strong: '#2a3549',
         },
-        cyan: {
-          400: '#22d3ee',
-          500: '#06b6d4',
-          600: '#0891b2',
+        // Text
+        fg: {
+          DEFAULT: '#e6eaf2',
+          2: '#a3acbf',
+          3: '#7c869a',
         },
-        violet: {
-          400: '#a78bfa',
-          500: '#8b5cf6',
-          600: '#7c3aed',
+        // Brand accent for interactive UI (buttons, links, focus)
+        accent: {
+          DEFAULT: '#22d3ee',
+          hover: '#67e8f9',
+          ink: '#04111d',
         },
-        rose: {
-          400: '#fb7185',
-          500: '#f43f5e',
-        }
+        // Verdict colors — validated CVD-safe pair on the surface color
+        ai: { DEFAULT: '#e66767', text: '#fca5a5' },
+        human: { DEFAULT: '#3987e5', text: '#93c5fd' },
+      },
+      opacity: {
+        3: '0.03',
+        8: '0.08',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'grid-pattern': "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+      maxWidth: {
+        '8xl': '88rem',
       },
-      animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'float': 'float 6s ease-in-out infinite',
-        'glow': 'glow 2s ease-in-out infinite alternate',
-        'scan': 'scan 2s linear infinite',
-      },
-      keyframes: {
-        float: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-12px)' },
-        },
-        glow: {
-          '0%': { boxShadow: '0 0 5px #06b6d4, 0 0 20px #06b6d480' },
-          '100%': { boxShadow: '0 0 20px #06b6d4, 0 0 60px #06b6d440' },
-        },
-        scan: {
-          '0%': { transform: 'translateY(-100%)' },
-          '100%': { transform: 'translateY(100vh)' },
-        }
-      },
-      backdropBlur: {
-        xs: '2px',
-      }
     },
   },
   plugins: [],

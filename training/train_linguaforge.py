@@ -128,6 +128,7 @@ def main(args):
             best_f1 = vf1
             torch.save(model.state_dict(), os.path.join(args.output_dir, "linguaforge_model.pth"))
             tokenizer.save_pretrained(args.output_dir)
+            model.bert.config.save_pretrained(args.output_dir)  # lets the backend rebuild BERT offline
             print(f"  ✓ Saved (F1={best_f1:.4f})")
     _, ta, tf1, tp, tl2 = run_epoch(model, test_ld, device=device, train=False)
     print(f"\n[Test] Acc: {ta:.4f}  F1: {tf1:.4f}")

@@ -10,8 +10,13 @@ services:
     volumes:
       - ./backend/models:/app/models
       - ./backend/uploads:/app/uploads
+      - ./backend/data:/app/data
+      # Pre-trained detectors: run `docker compose exec backend python download_models.py` once
+      - hf-cache:/root/.cache/huggingface
     environment:
       - PYTHONUNBUFFERED=1
+      # - TEXT_DETECTOR_MODEL=Oxidane/tmr-ai-text-detector
+      # - IMAGE_DETECTOR_MODEL=buildborderless/CommunityForensics-DeepfakeDet-ViT
     restart: unless-stopped
 
   frontend:
@@ -25,3 +30,6 @@ services:
     environment:
       - VITE_API_URL=http://backend:8000
     restart: unless-stopped
+
+volumes:
+  hf-cache:
