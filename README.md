@@ -145,14 +145,14 @@ Restart the backend; its log then shows `Pre-trained detector loaded: …`, and 
 names the model that produced it. Use `--text` or `--image` to download only one of them.
 
 | Task | Default model | Download | License | Published results (by the authors) |
-|---|---|---|---|---|
+|---|---|---|---|
 | AI text | [`Oxidane/tmr-ai-text-detector`](https://huggingface.co/Oxidane/tmr-ai-text-detector) — RoBERTa-base trained on the RAID benchmark | 503 MB | MIT | RAID leaderboard: AUROC 99.28% across all settings incl. adversarial attacks; 97.4% accuracy on a held-out RAID split |
 | AI image | [`buildborderless/CommunityForensics-DeepfakeDet-ViT`](https://huggingface.co/buildborderless/CommunityForensics-DeepfakeDet-ViT) — ViT-Small trained on 2.7M images from 4,803 generators ([Community Forensics paper](https://arxiv.org/abs/2411.04125)) | 87 MB | MIT | See the paper |
 
 **Other supported models** — set the environment variable, then download:
 
 | Model | Notes |
-|---|---|
+|---|---|---|---|
 | `desklib/ai-text-detector-v1.01` | DeBERTa-v3-large; listed at the top of the RAID leaderboard on its model card. 1.7 GB and several times slower on CPU, so SHAP explanations take much longer. |
 | `fakespot-ai/roberta-base-ai-text-detection-v1` | RoBERTa-base by Mozilla Fakespot, Apache-2.0. |
 | `Hello-SimpleAI/chatgpt-detector-roberta` | Trained on HC3 (ChatGPT-3.5 answers, 2023) — weaker on newer AI models. |
@@ -181,20 +181,24 @@ Most standard Hugging Face text/image classifiers work; check the backend log af
 - To free the space again, delete the `models--…` folders in the Hugging Face cache
   (`~/.cache/huggingface/hub`, on Windows `C:\Users\<you>\.cache\huggingface\hub`).
 
-### Observed misclassification reports
+## Known wrong-prediction errors from screenshots
 
-The following incorrect results were observed during manual testing. They are recorded here
-because a high confidence score does not guarantee a correct prediction for an individual input:
+The following incorrect results were observed during manual testing and documented in the
+user-provided screenshots. These are wrong-prediction errors: the expected labels were
+AI-generated for both samples, but the application returned human-written/real labels.
+They are recorded here because a high confidence score does not guarantee a correct
+prediction for an individual input:
 
-| Input | Result shown by the application | Reported issue |
-|---|---|---|
-| Text describing traffic congestion in Bengaluru (66 words) | **Human-written**, 50.5% confidence; AI-generated 49.5% | The text was expected to be identified as AI-generated, but the result was effectively borderline and was classified as human-written. The UI reported the **Fast model (bag-of-words + logistic regression)**. |
-| Uploaded file `AI image.jpeg` (511 KB) | **Real image**, 98.5% confidence; AI-generated 1.5% | The image was expected to be identified as AI-generated, but the result was classified as real. The UI reported `buildborderless/CommunityForensics-DeepfakeDet-ViT (pre-trained)`. |
+| Screenshot evidence | Input | Result shown by the application | Wrong-prediction error |
+|---|---|---|---|---|
+| User screenshot: text-analysis result | Text describing traffic congestion in Bengaluru (66 words) | **Human-written**, 50.5% confidence; AI-generated 49.5% | Expected **AI-generated**, but classified as **human-written**. The result was borderline and the UI reported the **Fast model (bag-of-words + logistic regression)**. |
+| User screenshot: image-analysis result | Uploaded file `AI image.jpeg` (511 KB) | **Real image**, 98.5% confidence; AI-generated 1.5% | Expected **AI-generated**, but classified as **real**. The UI reported `buildborderless/CommunityForensics-DeepfakeDet-ViT (pre-trained)`. |
 
 These examples should be added to the project's evaluation set and used when tuning or
 retraining the detectors. Do not treat the displayed confidence as proof of authenticity;
 verify the ground truth of each sample and evaluate precision, recall, confusion matrices,
-and calibration on a representative held-out dataset.
+and calibration on a representative held-out dataset. The screenshots are evidence of the
+observed outputs, not claims that the displayed labels are correct.
 
 ---
 
