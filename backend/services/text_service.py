@@ -2,8 +2,8 @@
 Text Analysis Service
 Detects AI-generated text. Model priority:
   1. a pre-trained Hugging Face detector, once downloaded (see services/pretrained.py),
-  2. the RoBERTa + LinguaForge-X ensemble, when trained models are in models/saved/,
-  3. the bundled fast model (bag-of-words + logistic regression). Explanations are real SHAP values computed
+  2. the RoBERTa + LinguaForge-X ensemble, when trained models are in models/saved/.
+With neither, text analysis is unavailable. Explanations are real SHAP values computed
 on whichever model is active, so the same text always gets the same result.
 """
 import asyncio
@@ -32,7 +32,6 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "saved")
 ROBERTA_PATH = os.path.join(MODEL_DIR, "roberta_ai_detector")
 LINGUA_PATH = os.path.join(MODEL_DIR, "linguaforge_detector")
 ENSEMBLE_PATH = os.path.join(MODEL_DIR, "ensemble")
-FAST_MODEL_PATH = os.path.join(MODEL_DIR, "fast_text_model.pkl")
 
 MAX_LENGTH = 512
 BATCH_SIZE = 16
@@ -49,7 +48,6 @@ class TextAnalysisService:
         self.pretrained = None     # TextDetector (Hugging Face)
         self.roberta = None        # (model, tokenizer)
         self.lingua = None         # (model, tokenizer)
-        self.fast_model = None     # sklearn pipeline
         self.weights = {"roberta": 0.55, "linguaforge": 0.45}
         self.meta_learner = None
         self._lock = threading.Lock()
@@ -57,9 +55,8 @@ class TextAnalysisService:
 
         self.explainer = None
         if self.available:
-            # Transformers are slow on CPU, so they get a smaller SHAP evaluation budget.
-            default_evals = 500 if self.fast_model is not None else 120
-            self.shap_max_evals = int(os.getenv("SHAP_MAX_EVALS", default_evals))
+            # Transformers are slow on CPU, so SHAP gets a small evaluation budget.
+            self.shap_max_evals = int(os.getenv("SHAP_MAX_EVALS", 120))
             self.explainer = shap.Explainer(self._predict_ai_proba, shap.maskers.Text(r"\W+"))
             # The first SHAP call JIT-compiles internals; do it now instead of on a user request.
             self._explain("Warm-up sentence for the explainer so the first request is fast.")
@@ -93,14 +90,6 @@ class TextAnalysisService:
         else:
             print("[TextService] PyTorch not available — transformer models disabled.")
 
-        if not (self.roberta or self.lingua) and os.path.exists(FAST_MODEL_PATH):
-            try:
-                with open(FAST_MODEL_PATH, "rb") as f:
-                    self.fast_model = pickle.load(f)
-                print("[TextService] Fast text model loaded.")
-            except Exception as e:
-                print(f"[TextService] Fast model load error: {e}")
-
     def _load_ensemble_config(self):
         """Use the weights / meta-learner chosen by training/train_ensemble.py, if present."""
         config_path = os.path.join(ENSEMBLE_PATH, "ensemble_config.json")
@@ -121,7 +110,7 @@ class TextAnalysisService:
 
     @property
     def available(self) -> bool:
-        return bool(self.pretrained or self.roberta or self.lingua or self.fast_model is not None)
+        return bool(self.pretrained or self.roberta or self.lingua)
 
     @property
     def model_used(self) -> str:
@@ -133,8 +122,6 @@ class TextAnalysisService:
             return "RoBERTa"
         if self.lingua:
             return "LinguaForge-X"
-        if self.fast_model is not None:
-            return "Fast model (bag-of-words + logistic regression)"
         return "No model available"
 
     # ── Inference ─────────────────────────────────────────────────────────────
@@ -166,14 +153,12 @@ class TextAnalysisService:
         """AI probability from each active model."""
         if self.pretrained:
             return {"pretrained": self.pretrained.predict(texts)}
-        if self.roberta or self.lingua:
-            probas = {}
-            if self.roberta:
-                probas["roberta"] = self._roberta_proba(texts)
-            if self.lingua:
-                probas["linguaforge"] = self._lingua_proba(texts)
-            return probas
-        return {"fast": self.fast_model.predict_proba(texts)[:, 1]}
+        probas = {}
+        if self.roberta:
+            probas["roberta"] = self._roberta_proba(texts)
+        if self.lingua:
+            probas["linguaforge"] = self._lingua_proba(texts)
+        return probas
 
     def _combine(self, probas: Dict[str, np.ndarray]) -> np.ndarray:
         if "roberta" in probas and "linguaforge" in probas:
@@ -264,7 +249,6 @@ class TextAnalysisService:
         if not self.available:
             raise ModelUnavailableError(
                 "No AI text detection model is available on the server. Run "
-                "`python download_models.py` in the backend folder, train a model (see README), "
-                "or restore models/saved/fast_text_model.pkl.")
+                "`python download_models.py` in the backend folder, or train a model (see README).")
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._analyze_sync, text, explain)

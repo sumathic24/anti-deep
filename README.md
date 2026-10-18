@@ -119,13 +119,12 @@ uvicorn main:app --reload --port 8000
 Backend API at: **http://localhost:8000**
 API Docs at: **http://localhost:8000/docs**
 
-> **Note:** Without trained models the backend falls back to simple models, and every
-> result says which model produced it:
-> - **Text:** the bundled fast model (`models/saved/fast_text_model.pkl`, bag-of-words + logistic regression).
+> **Note:** No models are bundled with the repo. Download the pre-trained detectors
+> (next section) or train your own (see Training section). Without a model:
+> - **Text:** analysis is unavailable; the API returns an error explaining how to get a model.
 > - **Images:** a metadata heuristic (EXIF + image size). GradCAM needs the trained EfficientNet.
 >
-> For much better accuracy without training anything, download the pre-trained
-> detectors (next section), or train your own models (see Training section).
+> Every result says which model produced it.
 
 ---
 

@@ -303,7 +303,7 @@ export default function TextAnalysis() {
           <ul className="space-y-2 text-[13px] leading-relaxed text-fg-2">
             <li><span className="text-fg">Pre-trained detector (recommended):</span> a RoBERTa model trained on the RAID benchmark, once downloaded with <code className="font-mono text-xs text-fg">download_models.py</code>.</li>
             <li><span className="text-fg">Trained models:</span> the project's own RoBERTa (55%) + LinguaForge-X (45%) ensemble.</li>
-            <li><span className="text-fg">Fallback:</span> a small bag-of-words model when neither is available.</li>
+            <li><span className="text-fg">No model:</span> text analysis is unavailable until one of the above is installed.</li>
             <li><span className="text-fg">Explanation:</span> SHAP values computed on whichever model produced the result.</li>
           </ul>
         </div>
