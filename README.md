@@ -59,6 +59,7 @@ anti-deep/
 │   │   ├── pretrained.py        # Pre-trained Hugging Face detectors (text + image)
 │   │   └── history.py           # SQLite analysis history (data/history.db)
 │   ├── models/saved/            # Trained model weights (after training)
+│   ├── models/pretrained/       # Downloaded pre-trained detectors (not in git)
 │   ├── download_models.py       # Downloads the pre-trained detectors
 │   └── requirements.txt
 │
@@ -69,7 +70,6 @@ anti-deep/
 │   ├── train_ensemble.py        # Grid search + meta-learner ensemble fusion
 │   └── train_image_classifier.py# EfficientNet / ViT image classifier
 │
-├── docker-compose.yml
 └── README.md
 ```
 
@@ -140,6 +140,7 @@ python download_models.py --dry-run   # shows what will be downloaded (~590 MB i
 python download_models.py             # downloads the text + image detectors
 ```
 
+The models are saved in `backend/models/pretrained/` (ignored by git).
 Restart the backend; its log then shows `Pre-trained detector loaded: …`, and every result
 names the model that produced it. Use `--text` or `--image` to download only one of them.
 
@@ -167,7 +168,7 @@ Set `TEXT_DETECTOR_MODEL` or `IMAGE_DETECTOR_MODEL` to `none` to switch a pre-tr
 Most standard Hugging Face text/image classifiers work; check the backend log after switching.
 
 **Which model the backend uses:** a downloaded pre-trained detector → your own trained models
-(`models/saved/`) → the built-in fallback.
+(`models/saved/`). With neither, text analysis is unavailable and images use the metadata heuristic.
 
 **Good to know**
 - The accuracy figures above are the model authors' own results, not measured in this project.
@@ -176,9 +177,7 @@ Most standard Hugging Face text/image classifiers work; check the backend log af
   released after the detector was trained.
 - SHAP explanations work with every text model. GradCAM heatmaps come only from the project's own
   EfficientNet; the pre-trained image detector gives a verdict without a heatmap.
-- Docker: `docker compose exec backend python download_models.py` (kept in the `hf-cache` volume).
-- To free the space again, delete the `models--…` folders in the Hugging Face cache
-  (`~/.cache/huggingface/hub`, on Windows `C:\Users\<you>\.cache\huggingface\hub`).
+- To free the space again, delete the model's folder in `backend/models/pretrained/`.
 
 ## 🧠 Model Training
 
@@ -293,18 +292,6 @@ Response:
 GET    /api/stats?days=7              # totals + per-day series for the last 7 (or 30) days
 GET    /api/history?limit=10&offset=0 # recorded analyses, newest first
 DELETE /api/history                   # delete all recorded analyses
-```
-
----
-
-## 🐳 Docker Deployment
-
-```bash
-# Build and run entire stack
-docker-compose up --build
-
-# Frontend: http://localhost:5173
-# Backend:  http://localhost:8000
 ```
 
 ---

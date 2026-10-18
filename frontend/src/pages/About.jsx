@@ -35,7 +35,6 @@ const techStack = [
   { layer: 'Models', items: ['Oxidane TMR', 'Community Forensics ViT', 'RoBERTa', 'LinguaForge-X', 'EfficientNet', 'ViT-B/16'] },
   { layer: 'Explainability', items: ['SHAP 0.45', 'GradCAM'] },
   { layer: 'Storage', items: ['SQLite (analysis history)'] },
-  { layer: 'DevOps', items: ['Docker', 'Docker Compose', 'Nginx'] },
 ]
 
 function Section({ id, icon: Icon, title, description, children }) {
@@ -123,7 +122,7 @@ export default function About() {
       </Section>
 
       <Section id="stack" icon={Layers} title="Technology stack">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
           {techStack.map((t) => (
             <div key={t.layer} className="card p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wider text-fg-3">{t.layer}</p>

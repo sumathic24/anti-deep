@@ -2,8 +2,9 @@
 Pre-trained AI-content detectors from the Hugging Face Hub.
 
 They are NOT downloaded automatically. Run `python download_models.py` once in the
-backend folder; the backend then loads them from the local Hugging Face cache
-(local_files_only) and never downloads anything at runtime.
+backend folder; it saves them to models/pretrained/, and the backend loads them from
+there (local_files_only) and never downloads anything at runtime. A copy already in the
+Hugging Face cache is used if the project folder doesn't have one.
 
 Pick other models with the TEXT_DETECTOR_MODEL / IMAGE_DETECTOR_MODEL environment
 variables (a Hub id or a local folder), or set them to "none" to disable.
@@ -33,6 +34,19 @@ def configured_model(env_var: str, default: str):
 
 TEXT_MODEL_ID = configured_model("TEXT_DETECTOR_MODEL", DEFAULT_TEXT_MODEL)
 IMAGE_MODEL_ID = configured_model("IMAGE_DETECTOR_MODEL", DEFAULT_IMAGE_MODEL)
+
+PRETRAINED_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "pretrained"))
+
+
+def model_path(model_id: str) -> str:
+    """Where download_models.py saves a Hub model, e.g. models/pretrained/Oxidane--tmr-ai-text-detector."""
+    return os.path.join(PRETRAINED_DIR, model_id.replace("/", "--"))
+
+
+def model_source(model_id: str) -> str:
+    """The project copy if downloaded; otherwise the id itself (a local folder, or the Hugging Face cache)."""
+    path = model_path(model_id)
+    return path if os.path.isdir(path) else model_id
 
 
 class NotDownloadedError(RuntimeError):
@@ -68,12 +82,13 @@ class TextDetector:
 
     def __init__(self, model_id: str):
         self.model_id = model_id
+        source = model_source(model_id)
         try:
-            config = AutoConfig.from_pretrained(model_id, local_files_only=True)
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
+            config = AutoConfig.from_pretrained(source, local_files_only=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(source, local_files_only=True)
             self.desklib = "DesklibAIDetectionModel" in (config.architectures or [])
             model_cls = DesklibAIDetectionModel if self.desklib else AutoModelForSequenceClassification
-            self.model = model_cls.from_pretrained(model_id, local_files_only=True).eval()
+            self.model = model_cls.from_pretrained(source, local_files_only=True).eval()
         except OSError as e:
             raise NotDownloadedError(model_id) from e
         self.single_logit = self.desklib or config.num_labels == 1
@@ -104,9 +119,10 @@ class ImageDetector:
 
     def __init__(self, model_id: str):
         self.model_id = model_id
+        source = model_source(model_id)
         try:
-            self.model = AutoModelForImageClassification.from_pretrained(model_id, local_files_only=True).eval()
-            with open(cached_file(model_id, "preprocessor_config.json", local_files_only=True)) as f:
+            self.model = AutoModelForImageClassification.from_pretrained(source, local_files_only=True).eval()
+            with open(cached_file(source, "preprocessor_config.json", local_files_only=True)) as f:
                 prep = json.load(f)
         except OSError as e:
             raise NotDownloadedError(model_id) from e

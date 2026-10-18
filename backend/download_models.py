@@ -1,5 +1,5 @@
 """
-Download the pre-trained detectors the backend uses into the local Hugging Face cache.
+Download the pre-trained detectors the backend uses into models/pretrained/ (ignored by git).
 Nothing is downloaded until you run this; restart the backend afterwards.
 
     python download_models.py              # text + image detector
@@ -8,14 +8,13 @@ Nothing is downloaded until you run this; restart the backend afterwards.
     python download_models.py --dry-run    # show what would be downloaded, and its size
 
 Choose other models with the TEXT_DETECTOR_MODEL / IMAGE_DETECTOR_MODEL environment
-variables (see README). To free the space again, delete the model's folder from the
-cache directory printed at the end.
+variables (see README). To free the space again, delete the model's folder from
+models/pretrained/.
 """
 import argparse
 from huggingface_hub import HfApi, snapshot_download
-from huggingface_hub.constants import HF_HUB_CACHE
 
-from services.pretrained import TEXT_MODEL_ID, IMAGE_MODEL_ID
+from services.pretrained import TEXT_MODEL_ID, IMAGE_MODEL_ID, PRETRAINED_DIR, model_path
 
 CONFIG_PATTERNS = ["config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json",
                    "special_tokens_map.json", "added_tokens.json", "vocab.json", "vocab.txt", "merges.txt", "spm.model"]
@@ -56,8 +55,8 @@ def main():
 
     for label, model_id, files, _ in plan:
         print(f"\nDownloading {model_id} …")
-        snapshot_download(model_id, allow_patterns=files)
-    print(f"\nDone. Models are stored in {HF_HUB_CACHE}\nRestart the backend to use them.")
+        snapshot_download(model_id, allow_patterns=files, local_dir=model_path(model_id))
+    print(f"\nDone. Models are stored in {PRETRAINED_DIR}\nRestart the backend to use them.")
 
 
 if __name__ == "__main__":
