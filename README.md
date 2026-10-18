@@ -180,27 +180,6 @@ Most standard Hugging Face text/image classifiers work; check the backend log af
 - To free the space again, delete the `models--…` folders in the Hugging Face cache
   (`~/.cache/huggingface/hub`, on Windows `C:\Users\<you>\.cache\huggingface\hub`).
 
-## Known wrong-prediction errors from screenshots
-
-The following incorrect results were observed during manual testing and documented in the
-user-provided screenshots. These are wrong-prediction errors: the expected labels were
-AI-generated for both samples, but the application returned human-written/real labels.
-They are recorded here because a high confidence score does not guarantee a correct
-prediction for an individual input:
-
-| Screenshot evidence | Input | Result shown by the application | Wrong-prediction error |
-|---|---|---|---|---|
-| User screenshot: text-analysis result | Text describing traffic congestion in Bengaluru (66 words) | **Human-written**, 50.5% confidence; AI-generated 49.5% | Expected **AI-generated**, but classified as **human-written**. The result was borderline and the UI reported the **Fast model (bag-of-words + logistic regression)**. |
-| User screenshot: image-analysis result | Uploaded file `AI image.jpeg` (511 KB) | **Real image**, 98.5% confidence; AI-generated 1.5% | Expected **AI-generated**, but classified as **real**. The UI reported `buildborderless/CommunityForensics-DeepfakeDet-ViT (pre-trained)`. |
-
-These examples should be added to the project's evaluation set and used when tuning or
-retraining the detectors. Do not treat the displayed confidence as proof of authenticity;
-verify the ground truth of each sample and evaluate precision, recall, confusion matrices,
-and calibration on a representative held-out dataset. The screenshots are evidence of the
-observed outputs, not claims that the displayed labels are correct.
-
----
-
 ## 🧠 Model Training
 
 ### Step 1 — Prepare Datasets
