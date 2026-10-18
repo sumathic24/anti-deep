@@ -368,4 +368,4 @@ MIT License — see [LICENSE](LICENSE) file.
 
 ---
 
-*Built with ❤️ as a Final Year Major Project — CSE (Data Science)*
+*Built with  as a Final Year Major Project — CSE (Data Science)*
