@@ -4,7 +4,7 @@ import { PageHeader, fadeIn } from '../components/ui'
 
 const models = [
   { name: 'Oxidane TMR', role: 'AI text detection (default)', type: 'RoBERTa-base, trained on RAID', source: 'Pre-trained · download 503 MB', perf: 'AUROC 99.28% on RAID (reported by its authors)' },
-  { name: 'Community Forensics ViT', role: 'AI image detection (default)', type: 'ViT-Small, 4,803 generators', source: 'Pre-trained · download 87 MB', perf: 'See the Community Forensics paper' },
+  { name: 'SwinV2 image detector', role: 'AI image detection (default)', type: 'SwinV2 (haywoodsloan/ai-image-detector-deploy)', source: 'Pre-trained · download 781 MB', perf: '98.1% on its own validation set (reported by its author)' },
   { name: 'RoBERTa', role: 'AI text detection', type: 'Transformer (fine-tuned)', source: 'Train with training/', perf: 'Target 95.8% — not yet measured' },
   { name: 'LinguaForge-X', role: 'Linguistic pattern analysis', type: 'BERT + linguistic features', source: 'Train with training/', perf: 'Target 94.6% — not yet measured' },
   { name: 'Ensemble (R + L)', role: 'Final text verdict', type: 'Weighted fusion / meta-learner', source: 'Train with training/', perf: 'Target 97.4% — not yet measured' },
@@ -14,7 +14,6 @@ const models = [
 
 const datasets = [
   { name: 'RAID', type: 'Text · AI vs human, incl. adversarial attacks', samples: '6,000,000+', usedBy: 'Pre-trained text detector' },
-  { name: 'Community Forensics', type: 'Image · 4,803 generators', samples: '2,700,000', usedBy: 'Pre-trained image detector' },
   { name: 'HC3', type: 'Text · AI vs human', samples: '58,000+', usedBy: 'Own text models' },
   { name: 'GPT-Wiki-Intro', type: 'Text · AI-generated', samples: '150,000+', usedBy: 'Own text models' },
   { name: 'OpenAI Human vs AI', type: 'Text · classification', samples: '500,000+', usedBy: 'Own text models' },
@@ -32,7 +31,7 @@ const xaiTools = [
 const techStack = [
   { layer: 'Frontend', items: ['React 18', 'Tailwind CSS', 'Framer Motion', 'Recharts', 'Axios'] },
   { layer: 'Backend', items: ['FastAPI', 'Python 3.11', 'PyTorch 2.2', 'Transformers 4.40'] },
-  { layer: 'Models', items: ['Oxidane TMR', 'Community Forensics ViT', 'RoBERTa', 'LinguaForge-X', 'EfficientNet', 'ViT-B/16'] },
+  { layer: 'Models', items: ['Oxidane TMR', 'SwinV2 image detector', 'RoBERTa', 'LinguaForge-X', 'EfficientNet', 'ViT-B/16'] },
   { layer: 'Explainability', items: ['SHAP 0.45', 'GradCAM'] },
   { layer: 'Storage', items: ['SQLite (analysis history)'] },
 ]

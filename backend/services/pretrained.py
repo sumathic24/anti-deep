@@ -20,7 +20,7 @@ from transformers import (AutoConfig, AutoModel, AutoModelForImageClassification
 from transformers.utils import cached_file
 
 DEFAULT_TEXT_MODEL = "Oxidane/tmr-ai-text-detector"
-DEFAULT_IMAGE_MODEL = "buildborderless/CommunityForensics-DeepfakeDet-ViT"
+DEFAULT_IMAGE_MODEL = "haywoodsloan/ai-image-detector-deploy"
 BATCH_SIZE = 16
 
 # Label names that mean "AI-generated" in the models' id2label

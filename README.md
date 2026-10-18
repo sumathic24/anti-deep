@@ -136,7 +136,7 @@ published on Hugging Face. They are **not** downloaded automatically — run thi
 ```bash
 cd backend
 venv\Scripts\activate                 # Windows  (source venv/bin/activate on Linux/Mac)
-python download_models.py --dry-run   # shows what will be downloaded (~590 MB in total)
+python download_models.py --dry-run   # shows what will be downloaded (~1.3 GB in total)
 python download_models.py             # downloads the text + image detectors
 ```
 
@@ -145,18 +145,32 @@ Restart the backend; its log then shows `Pre-trained detector loaded: …`, and 
 names the model that produced it. Use `--text` or `--image` to download only one of them.
 
 | Task | Default model | Download | License | Published results (by the authors) |
-|---|---|---|---|
+|---|---|---|---|---|
 | AI text | [`Oxidane/tmr-ai-text-detector`](https://huggingface.co/Oxidane/tmr-ai-text-detector) — RoBERTa-base trained on the RAID benchmark | 503 MB | MIT | RAID leaderboard: AUROC 99.28% across all settings incl. adversarial attacks; 97.4% accuracy on a held-out RAID split |
-| AI image | [`buildborderless/CommunityForensics-DeepfakeDet-ViT`](https://huggingface.co/buildborderless/CommunityForensics-DeepfakeDet-ViT) — ViT-Small trained on 2.7M images from 4,803 generators ([Community Forensics paper](https://arxiv.org/abs/2411.04125)) | 87 MB | MIT | See the paper |
+| AI image | [`haywoodsloan/ai-image-detector-deploy`](https://huggingface.co/haywoodsloan/ai-image-detector-deploy) — SwinV2, regularly updated | 781 MB | Apache-2.0 | 98.1% accuracy on its own validation set (the data is not described) |
+
+**Image detector comparison (our own check, October 2026).** 160 labelled images — 40 AI + 40 real
+from [`eddyfox8812/ai-vs-real-2k-images`](https://huggingface.co/datasets/eddyfox8812/ai-vs-real-2k-images)
+and from [`LuckyCow/Ai_vs_real_web_images`](https://huggingface.co/datasets/LuckyCow/Ai_vs_real_web_images)
+(images collected from the web, often recompressed). Accuracy, with AI images caught in brackets:
+
+| Image detector | General set | Web set |
+|---|---|---|
+| `haywoodsloan/ai-image-detector-deploy` (default) | **89%** (38/40) | **61%** (13/40) |
+| `buildborderless/CommunityForensics-DeepfakeDet-ViT` | 70% (19/40) | 55% (5/40) |
+| `Organika/sdxl-detector` | 74% (35/40) | 54% (18/40) |
+
+A small sample, so treat these as a rough guide. Every detector struggles with images that were
+recompressed or shared online (e.g. via WhatsApp).
 
 **Other supported models** — set the environment variable, then download:
 
 | Model | Notes |
-|---|---|---|---|
+|---|---|
 | `desklib/ai-text-detector-v1.01` | DeBERTa-v3-large; listed at the top of the RAID leaderboard on its model card. 1.7 GB and several times slower on CPU, so SHAP explanations take much longer. |
 | `fakespot-ai/roberta-base-ai-text-detection-v1` | RoBERTa-base by Mozilla Fakespot, Apache-2.0. |
 | `Hello-SimpleAI/chatgpt-detector-roberta` | Trained on HC3 (ChatGPT-3.5 answers, 2023) — weaker on newer AI models. |
-| `haywoodsloan/ai-image-detector-deploy` | SwinV2 image detector, Apache-2.0, regularly updated. |
+| `buildborderless/CommunityForensics-DeepfakeDet-ViT` | ViT-Small trained on 2.7M images from 4,803 generators ([paper](https://arxiv.org/abs/2411.04125)), MIT, 87 MB. Fast, but in our check it labelled most AI images as real. |
 | `Organika/sdxl-detector` | Swin image detector, strong on SDXL images; CC BY-NC (non-commercial only). |
 
 ```bash

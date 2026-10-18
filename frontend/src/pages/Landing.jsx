@@ -22,7 +22,7 @@ const features = [
   },
   {
     icon: Image, title: 'Deepfake image detection', to: '/image-analysis', cta: 'Analyze an image',
-    desc: 'A Community Forensics ViT trained on thousands of generators — or the project’s own EfficientNet + ViT — flags AI-generated images.',
+    desc: 'A pre-trained SwinV2 detector — or the project’s own EfficientNet + ViT — flags AI-generated images.',
   },
   {
     icon: Brain, title: 'Explainable by default', to: '/about#explainability', cta: 'How it explains',

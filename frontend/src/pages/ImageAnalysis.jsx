@@ -270,7 +270,7 @@ export default function ImageAnalysis() {
             <Info size={15} className="text-fg-3" /> How detection works
           </p>
           <ul className="space-y-2 text-[13px] leading-relaxed text-fg-2">
-            <li><span className="text-fg">Pre-trained detector (recommended):</span> a Community Forensics ViT trained on 4,800+ image generators, once downloaded with <code className="font-mono text-xs text-fg">download_models.py</code>.</li>
+            <li><span className="text-fg">Pre-trained detector (recommended):</span> a SwinV2 AI-image detector, once downloaded with <code className="font-mono text-xs text-fg">download_models.py</code>.</li>
             <li><span className="text-fg">Trained models:</span> the project's own EfficientNet-B4 + ViT-B/16, averaged.</li>
             <li><span className="text-fg">Fallback:</span> a metadata heuristic (camera EXIF data) when neither is available.</li>
             <li><span className="text-fg">Explanation:</span> GradCAM highlights the regions behind an AI-generated verdict (project's own EfficientNet only).</li>
