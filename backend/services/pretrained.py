@@ -85,7 +85,12 @@ class TextDetector:
         source = model_source(model_id)
         try:
             config = AutoConfig.from_pretrained(source, local_files_only=True)
-            self.tokenizer = AutoTokenizer.from_pretrained(source, local_files_only=True)
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(source, local_files_only=True)
+            except Exception:
+                # tokenizer.json saved by a newer `tokenizers` than transformers 4.40 allows can't be
+                # parsed here; build the tokenizer from vocab.json/merges.txt instead.
+                self.tokenizer = AutoTokenizer.from_pretrained(source, local_files_only=True, use_fast=False)
             self.desklib = "DesklibAIDetectionModel" in (config.architectures or [])
             model_cls = DesklibAIDetectionModel if self.desklib else AutoModelForSequenceClassification
             self.model = model_cls.from_pretrained(source, local_files_only=True).eval()
