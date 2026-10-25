@@ -28,14 +28,14 @@ export default function Footer() {
           <div className="col-span-2">
             <Logo size="sm" />
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-fg-3">
-              Explainable detection of AI-generated text and deepfake images.
+              Explainable detection of AI-generated text, images and videos.
               Aligned with UN SDG 16: Peace, Justice and Strong Institutions.
             </p>
           </div>
           <div>
             <p className="mb-3 text-xs font-medium uppercase tracking-wider text-fg-3">Product</p>
             <ul className="space-y-2 text-sm">
-              {[['/text-analysis', 'Text Analysis'], ['/image-analysis', 'Image Analysis'], ['/dashboard', 'Dashboard']].map(([path, label]) => (
+              {[['/text-analysis', 'Text Analysis'], ['/image-analysis', 'Image Analysis'], ['/video-analysis', 'Video Analysis'], ['/dashboard', 'Dashboard']].map(([path, label]) => (
                 <li key={path}><Link to={path} className="text-fg-2 transition-colors hover:text-fg">{label}</Link></li>
               ))}
             </ul>

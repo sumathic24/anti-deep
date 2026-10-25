@@ -137,7 +137,8 @@ published on Hugging Face. They are **not** downloaded automatically — run thi
 cd backend
 venv\Scripts\activate                 # Windows  (source venv/bin/activate on Linux/Mac)
 python download_models.py --dry-run   # shows what will be downloaded (~1.3 GB in total)
-python download_models.py             # downloads the text + image detectors
+python download_models.py             # downloads the text + image + video detectors
+python download_models.py --video     # download only the video detector
 ```
 
 The models are saved in `backend/models/pretrained/` (ignored by git).
@@ -148,6 +149,7 @@ names the model that produced it. Use `--text` or `--image` to download only one
 |---|---|---|---|---|
 | AI text | [`Oxidane/tmr-ai-text-detector`](https://huggingface.co/Oxidane/tmr-ai-text-detector) — RoBERTa-base trained on the RAID benchmark | 503 MB | MIT | RAID leaderboard: AUROC 99.28% across all settings incl. adversarial attacks; 97.4% accuracy on a held-out RAID split |
 | AI image | [`haywoodsloan/ai-image-detector-deploy`](https://huggingface.co/haywoodsloan/ai-image-detector-deploy) — SwinV2, regularly updated | 781 MB | Apache-2.0 | 98.1% accuracy on its own validation set (the data is not described) |
+| Deepfake video | [`ducbao210/video-deepfake-detection`](https://huggingface.co/ducbao210/video-deepfake-detection) — ConvNeXt checkpoint applied to 16 sampled frames | 322 MB | See model card | The author's test table reports 64.68% AUC for ConvNeXt |
 
 **Image detector comparison (our own check, October 2026).** 160 labelled images — 40 AI + 40 real
 from [`eddyfox8812/ai-vs-real-2k-images`](https://huggingface.co/datasets/eddyfox8812/ai-vs-real-2k-images)
@@ -178,11 +180,15 @@ set TEXT_DETECTOR_MODEL=desklib/ai-text-detector-v1.01      # Windows (export ..
 python download_models.py --text
 ```
 
-Set `TEXT_DETECTOR_MODEL` or `IMAGE_DETECTOR_MODEL` to `none` to switch a pre-trained detector off.
+Set `TEXT_DETECTOR_MODEL`, `IMAGE_DETECTOR_MODEL`, or `VIDEO_DETECTOR_MODEL` to `none` to switch a pre-trained detector off.
 Most standard Hugging Face text/image classifiers work; check the backend log after switching.
 
 **Which model the backend uses:** a downloaded pre-trained detector → your own trained models
 (`models/saved/`). With neither, text analysis is unavailable and images use the metadata heuristic.
+
+Video analysis is available at `/video-analysis` and `POST /api/video/analyze`. It accepts MP4,
+MOV, AVI, MKV, and WEBM files up to 200 MB, samples up to 16 frames, and requires the video
+checkpoint downloaded with `python download_models.py --video`.
 
 **Good to know**
 - The accuracy figures above are the model authors' own results, not measured in this project.

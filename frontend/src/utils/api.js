@@ -44,6 +44,17 @@ export const analyzeImage = async (file, { signal, onUploadProgress } = {}) => {
   return res.data
 }
 
+export const analyzeVideo = async (file, { signal, onUploadProgress } = {}) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post('/api/video/analyze', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    signal,
+    onUploadProgress: onUploadProgress && ((e) => e.total && onUploadProgress(e.loaded / e.total)),
+  })
+  return res.data
+}
+
 // ── Dashboard ─────────────────────────────────────────────────
 export const getDashboardStats = async (days = 7) => {
   const res = await api.get('/api/stats', { params: { days } })

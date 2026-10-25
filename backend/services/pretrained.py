@@ -21,6 +21,7 @@ from transformers.utils import cached_file
 
 DEFAULT_TEXT_MODEL = "Oxidane/tmr-ai-text-detector"
 DEFAULT_IMAGE_MODEL = "haywoodsloan/ai-image-detector-deploy"
+DEFAULT_VIDEO_MODEL = "ducbao210/video-deepfake-detection"
 BATCH_SIZE = 16
 
 # Label names that mean "AI-generated" in the models' id2label
@@ -34,6 +35,7 @@ def configured_model(env_var: str, default: str):
 
 TEXT_MODEL_ID = configured_model("TEXT_DETECTOR_MODEL", DEFAULT_TEXT_MODEL)
 IMAGE_MODEL_ID = configured_model("IMAGE_DETECTOR_MODEL", DEFAULT_IMAGE_MODEL)
+VIDEO_MODEL_ID = configured_model("VIDEO_DETECTOR_MODEL", DEFAULT_VIDEO_MODEL)
 
 PRETRAINED_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "pretrained"))
 
@@ -169,6 +171,106 @@ class ImageDetector:
         if self.single_logit:
             return float(torch.sigmoid(logits[0, 0]))
         return float(torch.softmax(logits, dim=-1)[0, self.ai_index])
+
+
+class _VideoLayerNorm(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(channels))
+        self.bias = nn.Parameter(torch.zeros(channels))
+
+    def forward(self, x):
+        return torch.nn.functional.layer_norm(x.permute(0, 2, 3, 1), self.weight.shape,
+                                              self.weight, self.bias).permute(0, 3, 1, 2)
+
+
+class _VideoBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(channels) * 1e-6)
+        self.conv_dw = nn.Conv2d(channels, channels, 7, padding=3, groups=channels)
+        self.norm = nn.LayerNorm(channels)
+        self.mlp = nn.Module()
+        self.mlp.fc1 = nn.Linear(channels, channels * 4)
+        self.mlp.fc2 = nn.Linear(channels * 4, channels)
+
+    def forward(self, x):
+        residual = x
+        x = self.conv_dw(x).permute(0, 2, 3, 1)
+        x = self.mlp.fc2(torch.nn.functional.gelu(self.mlp.fc1(self.norm(x)))) * self.gamma
+        return (x.permute(0, 3, 1, 2) + residual)
+
+
+class _VideoStage(nn.Module):
+    def __init__(self, channels, depth, previous_channels=None):
+        super().__init__()
+        if previous_channels:
+            self.downsample = nn.Sequential(_VideoLayerNorm(previous_channels),
+                                            nn.Conv2d(previous_channels, channels, 2, stride=2))
+        self.blocks = nn.Sequential(*[_VideoBlock(channels) for _ in range(depth)])
+
+    def forward(self, x):
+        if hasattr(self, "downsample"):
+            x = self.downsample(x)
+        return self.blocks(x)
+
+
+class VideoConvNeXt(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Module()
+        self.encoder.stem = nn.Sequential(nn.Conv2d(3, 96, 4, stride=4), _VideoLayerNorm(96))
+        self.encoder.stages = nn.ModuleList()
+        depths = (3, 3, 27, 3)
+        dims = (96, 192, 384, 768)
+        for index, (channels, depth) in enumerate(zip(dims, depths)):
+            self.encoder.stages.append(_VideoStage(channels, depth, dims[index - 1] if index else None))
+        self.encoder.head = nn.Module()
+        self.encoder.head.norm = nn.LayerNorm(768)
+        self.classifier = nn.Sequential(nn.Dropout(0.0), nn.Linear(768, 2))
+
+    def forward(self, x):
+        x = self.encoder.stem(x)
+        for stage in self.encoder.stages:
+            x = stage(x)
+        x = self.encoder.head.norm(x.mean(dim=(2, 3)))
+        return self.classifier(x)
+
+
+class VideoDetector:
+    """Frame-level adapter for the ConvNeXt checkpoint published by the video model."""
+
+    def __init__(self, model_id: str):
+        self.model_id = model_id
+        self.checkpoint_url = (
+            "https://huggingface.co/ducbao210/video-deepfake-detection/"
+            "resolve/main/checkpoints/convnext/best.pth"
+        )
+        source = model_path(model_id)
+        checkpoint = os.path.join(source, "convnext-best.pth")
+        if not os.path.isfile(checkpoint):
+            raise NotDownloadedError(model_id)
+        try:
+            self.model = VideoConvNeXt()
+            state = torch.load(checkpoint, map_location="cpu")
+            state = state.get("model_state_dict", state.get("state_dict", state))
+            self.model.load_state_dict(state, strict=True)
+            self.model.eval()
+            self.size = {"height": 224, "width": 224}
+            self.crop = None
+            self.do_crop = False
+            self.resample = Image.Resampling.BICUBIC
+            self.rescale = 1 / 255
+            self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+            self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        except (OSError, RuntimeError, KeyError, TypeError) as e:
+            raise RuntimeError(f"Could not load video checkpoint {checkpoint}: {e}") from e
+
+    def predict_frames(self, frames) -> float:
+        pixels = torch.stack([ImageDetector._preprocess(self, frame).squeeze(0) for frame in frames])
+        with torch.no_grad():
+            logits = self.model(pixels)
+        return float(torch.softmax(logits, dim=-1)[:, 1].mean())
 
 
 def load_detector(cls, model_id, service_name):

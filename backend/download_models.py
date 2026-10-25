@@ -12,6 +12,7 @@ variables (see README). To free the space again, delete the model's folder from
 models/pretrained/.
 """
 import argparse
+import os
 from huggingface_hub import HfApi, snapshot_download
 
 from services.pretrained import TEXT_MODEL_ID, IMAGE_MODEL_ID, PRETRAINED_DIR, model_path
@@ -33,20 +34,28 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--text", action="store_true", help="download the text detector only")
     parser.add_argument("--image", action="store_true", help="download the image detector only")
+    parser.add_argument("--video", action="store_true", help="download the video detector only")
     parser.add_argument("--dry-run", action="store_true", help="list files and sizes without downloading")
     args = parser.parse_args()
-    both = not (args.text or args.image)
+    both = not (args.text or args.image or args.video)
 
     targets = []
     if (both or args.text) and TEXT_MODEL_ID:
         targets.append(("Text detector", TEXT_MODEL_ID))
     if (both or args.image) and IMAGE_MODEL_ID:
         targets.append(("Image detector", IMAGE_MODEL_ID))
+    if both or args.video:
+        targets.append(("Video detector", "ducbao210/video-deepfake-detection"))
     if not targets:
         print("Nothing to download (the selected detectors are disabled).")
         return
 
-    plan = [(label, model_id, *files_to_download(model_id)) for label, model_id in targets]
+    plan = []
+    for label, model_id in targets:
+        if label == "Video detector":
+            plan.append((label, model_id, ["checkpoints/convnext/best.pth"], 0))
+        else:
+            plan.append((label, model_id, *files_to_download(model_id)))
     for label, model_id, files, size in plan:
         print(f"{label}: {model_id}  ({size / 1e6:.0f} MB)\n    files: {', '.join(files)}")
     print(f"Total: {sum(p[3] for p in plan) / 1e6:.0f} MB")
@@ -54,6 +63,14 @@ def main():
         return
 
     for label, model_id, files, _ in plan:
+        if label == "Video detector":
+            from huggingface_hub import hf_hub_download
+            destination = os.path.join(model_path(model_id), "convnext-best.pth")
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            print(f"\nDownloading {model_id} ConvNeXt checkpoint …")
+            hf_hub_download(model_id, "checkpoints/convnext/best.pth", local_dir=os.path.dirname(destination))
+            os.replace(os.path.join(os.path.dirname(destination), "checkpoints", "convnext", "best.pth"), destination)
+            continue
         print(f"\nDownloading {model_id} …")
         snapshot_download(model_id, allow_patterns=files, local_dir=model_path(model_id))
     print(f"\nDone. Models are stored in {PRETRAINED_DIR}\nRestart the backend to use them.")

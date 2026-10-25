@@ -12,6 +12,7 @@ import { ApiStatusProvider } from './utils/apiStatus'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const TextAnalysis = lazy(() => import('./pages/TextAnalysis'))
 const ImageAnalysis = lazy(() => import('./pages/ImageAnalysis'))
+const VideoAnalysis = lazy(() => import('./pages/VideoAnalysis'))
 const About = lazy(() => import('./pages/About'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
@@ -57,6 +58,7 @@ export default function App() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/text-analysis" element={<TextAnalysis />} />
                   <Route path="/image-analysis" element={<ImageAnalysis />} />
+                  <Route path="/video-analysis" element={<VideoAnalysis />} />
                   <Route path="/about" element={<About />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
