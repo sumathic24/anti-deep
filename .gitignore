@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+.vscode/
+venv/
+backend/data/
+backend/models/pretrained/
