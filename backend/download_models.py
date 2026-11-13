@@ -45,7 +45,7 @@ def main():
     if (both or args.image) and IMAGE_MODEL_ID:
         targets.append(("Image detector", IMAGE_MODEL_ID))
     if both or args.video:
-        targets.append(("Video detector", "DarkVision/Deepfake_detection_video"))
+        targets.append(("Video detector", "ducbao210/video-deepfake-detection"))
     if not targets:
         print("Nothing to download (the selected detectors are disabled).")
         return
@@ -53,11 +53,7 @@ def main():
     plan = []
     for label, model_id in targets:
         if label == "Video detector":
-            plan.append((label, model_id, [
-                "p1/saved_model.pb",
-                "p1/variables/variables.index",
-                "p1/variables/variables.data-00000-of-00001",
-            ], 0))
+            plan.append((label, model_id, ["checkpoints/convnext/best.pth"], 0))
         else:
             plan.append((label, model_id, *files_to_download(model_id)))
     for label, model_id, files, size in plan:
@@ -69,10 +65,11 @@ def main():
     for label, model_id, files, _ in plan:
         if label == "Video detector":
             from huggingface_hub import hf_hub_download
-            destination = model_path(model_id)
-            print(f"\nDownloading {model_id} Keras checkpoint …")
-            for filename in files:
-                hf_hub_download(model_id, filename, local_dir=destination)
+            destination = os.path.join(model_path(model_id), "convnext-best.pth")
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            print(f"\nDownloading {model_id} ConvNeXt checkpoint …")
+            hf_hub_download(model_id, "checkpoints/convnext/best.pth", local_dir=os.path.dirname(destination))
+            os.replace(os.path.join(os.path.dirname(destination), "checkpoints", "convnext", "best.pth"), destination)
             continue
         print(f"\nDownloading {model_id} …")
         snapshot_download(model_id, allow_patterns=files, local_dir=model_path(model_id))

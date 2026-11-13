@@ -7,4 +7,3 @@ __pycache__/
 node_modules/
 .vscode/
 backend/data/
-backend/models/pretrained/

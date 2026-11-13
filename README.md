@@ -17,8 +17,7 @@
 DeepFakeShield is a production-quality multimodal AI detection platform that combines:
 
 - **NLP (Desklib AI detector)** — AI-generated text & fake news detection
-- **Computer Vision (ViT + Grad-CAM)** — AI-generated image detection
-- **Video Forensics (DarkVision Keras detector)** — frame-level deepfake detection
+- **Computer Vision (EfficientNet + ViT)** — AI-generated image detection
 - **Explainable AI (SHAP, LIME, GradCAM)** — Full reasoning transparency
 - **Ensemble Learning** — Weighted prediction fusion for maximum accuracy
 
@@ -119,10 +118,6 @@ API Docs at: **http://localhost:8000/docs**
 > first startup and caches it locally. The detector is based on DeBERTa and returns a
 > single probability for AI-generated text. Set `DESKLIB_MODEL_ID` to use a compatible
 > model repository instead.
->
-> Image detection uses `dima806/deepfake_vs_real_image_detection` and returns ViT
-> gradient-based patch explanations. Video detection uses the Keras `p1` checkpoint
-> from `DarkVision/Deepfake_detection_video` and returns frame-level saliency regions.
 
 ---
 
