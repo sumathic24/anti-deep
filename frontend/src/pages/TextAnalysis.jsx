@@ -8,43 +8,6 @@ const fadeUp = {
   show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.5, delay: i * 0.08 } }),
 }
 
-function generateMockResult(text) {
-  const words = text.split(' ')
-  
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) hash += text.charCodeAt(i);
-  const isHumanSample = text.toLowerCase().includes("went to the market") || (hash % 2 === 0);
-  
-  const aiScore = isHumanSample ? (Math.random() * 0.35 + 0.1) : (Math.random() * 0.45 + 0.5);
-  const fakeScore = isHumanSample ? (Math.random() * 0.3 + 0.1) : (Math.random() * 0.4 + 0.45);
-  
-  const robertaScore = Math.min(Math.max(aiScore + (Math.random() * 0.1 - 0.05), 0.05), 0.99)
-  const linguaScore = Math.min(Math.max(aiScore + (Math.random() * 0.1 - 0.05), 0.05), 0.99)
-  const tokenImportance = words.slice(0, 18).map((word) => ({
-    token: word,
-    score: parseFloat((Math.random()).toFixed(3)),
-    label: Math.random() > 0.6 ? 'ai' : Math.random() > 0.5 ? 'fake' : 'neutral',
-  }))
-  const shapValues = words.slice(0, 10).map((word) => ({
-    feature: word,
-    shap: parseFloat(((Math.random() - 0.4) * 0.8).toFixed(3)),
-  })).sort((a, b) => Math.abs(b.shap) - Math.abs(a.shap))
-  return {
-    prediction: aiScore > 0.5 ? 'AI Generated' : 'Human Written',
-    ai_confidence: parseFloat(aiScore.toFixed(4)),
-    human_confidence: parseFloat((1 - aiScore).toFixed(4)),
-    fake_news_score: parseFloat(fakeScore.toFixed(4)),
-    real_news_score: parseFloat((1 - fakeScore).toFixed(4)),
-    roberta: { prediction: robertaScore > 0.5 ? 'AI Generated' : 'Human Written', ai_confidence: robertaScore },
-    linguaforge: { prediction: linguaScore > 0.5 ? 'AI Generated' : 'Human Written', ai_confidence: linguaScore },
-    ensemble_weight: { roberta: 0.55, linguaforge: 0.45 },
-    token_importance: tokenImportance,
-    shap_values: shapValues,
-    suspicious_phrases: tokenImportance.filter(t => t.score > 0.7 && t.label === 'ai').map(t => t.token).slice(0, 4),
-    processing_time_ms: Math.floor(Math.random() * 800 + 400),
-  }
-}
-
 function ConfidenceBar({ value, color, label }) {
   return (
     <div className="mb-3">
@@ -144,9 +107,8 @@ export default function TextAnalysis() {
     try {
       const data = await analyzeText(text)
       setResult(data)
-    } catch {
-      await new Promise(r => setTimeout(r, 1200))
-      setResult(generateMockResult(text))
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Text analysis service is unavailable.')
     } finally { setLoading(false) }
   }
 
@@ -159,7 +121,7 @@ export default function TextAnalysis() {
         <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0} className="mb-10">
           <p className="section-label mb-2">NLP Analysis</p>
           <h1 className="text-4xl font-bold text-white mb-2">Text <span className="gradient-text">Analysis</span></h1>
-          <p className="text-slate-400 max-w-2xl">Detect AI-generated text and misinformation using RoBERTa + LinguaForge-X ensemble. Every prediction shows full explainability inline.</p>
+          <p className="text-slate-400 max-w-2xl">Detect AI-generated text and misinformation using the Desklib AI detector. Every prediction shows full explainability inline.</p>
         </motion.div>
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -301,15 +263,14 @@ export default function TextAnalysis() {
                   <div className="card">
                     <button onClick={() => setShowEnsemble(!showEnsemble)}
                       className="w-full flex items-center justify-between text-sm font-semibold text-white">
-                      <span className="flex items-center gap-2"><Brain size={15} className="text-violet-400" /> RoBERTa vs LinguaForge-X</span>
+                      <span className="flex items-center gap-2"><Brain size={15} className="text-violet-400" /> Desklib AI Detector</span>
                       {showEnsemble ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                     </button>
                     <AnimatePresence>
                       {showEnsemble && (
                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                           <div className="grid grid-cols-2 gap-4 mt-5">
-                            {[{ model: 'RoBERTa', data: result.roberta, color: '#22d3ee', weight: result.ensemble_weight.roberta },
-                              { model: 'LinguaForge-X', data: result.linguaforge, color: '#a78bfa', weight: result.ensemble_weight.linguaforge }].map(({ model, data, color, weight }) => (
+                            {[{ model: 'Desklib', data: result.desklib, color: '#22d3ee', weight: result.ensemble_weight.desklib }].map(({ model, data, color, weight }) => (
                               <div key={model} className="p-4 rounded-xl" style={{ background: `${color}08`, border: `1px solid ${color}20` }}>
                                 <div className="flex justify-between items-center mb-3">
                                   <p className="text-xs font-bold" style={{ color }}>{model}</p>
@@ -329,7 +290,7 @@ export default function TextAnalysis() {
                           <div className="mt-3 p-3 rounded-xl text-xs text-slate-400"
                             style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Info size={11} className="inline mr-1 text-slate-500" />
-                            Final = RoBERTa×{result.ensemble_weight.roberta} + LinguaForge-X×{result.ensemble_weight.linguaforge} = <strong className="text-white">{(result.ai_confidence * 100).toFixed(1)}%</strong>
+                            Desklib model score = <strong className="text-white">{(result.ai_confidence * 100).toFixed(1)}%</strong>
                           </div>
                         </motion.div>
                       )}

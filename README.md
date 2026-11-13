@@ -16,7 +16,7 @@
 
 DeepFakeShield is a production-quality multimodal AI detection platform that combines:
 
-- **NLP (RoBERTa + LinguaForge-X)** — AI-generated text & fake news detection
+- **NLP (Desklib AI detector)** — AI-generated text & fake news detection
 - **Computer Vision (EfficientNet + ViT)** — AI-generated image detection
 - **Explainable AI (SHAP, LIME, GradCAM)** — Full reasoning transparency
 - **Ensemble Learning** — Weighted prediction fusion for maximum accuracy
@@ -114,8 +114,10 @@ uvicorn main:app --reload --port 8000
 Backend API at: **http://localhost:8000**
 API Docs at: **http://localhost:8000/docs**
 
-> **Note:** The backend works **without trained models** using realistic mock inference.
-> Train your models (see Training section) to enable real AI inference.
+> **Note:** AI-text analysis downloads `desklib/ai-text-detector-v1.01` from Hugging Face on
+> first startup and caches it locally. The detector is based on DeBERTa and returns a
+> single probability for AI-generated text. Set `DESKLIB_MODEL_ID` to use a compatible
+> model repository instead.
 
 ---
 

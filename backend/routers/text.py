@@ -12,10 +12,13 @@ class TextRequest(BaseModel):
 
 @router.post("/analyze")
 async def analyze_text(req: TextRequest):
-    """Detect if text is AI-generated using RoBERTa + LinguaForge-X ensemble."""
+    """Detect if text is AI-generated using the Desklib detector."""
     if len(req.text.strip()) < 20:
         raise HTTPException(status_code=422, detail="Text must be at least 20 characters.")
-    return await service.analyze_ai_text(req.text)
+    try:
+        return await service.analyze_ai_text(req.text)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/fake-news")

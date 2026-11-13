@@ -1,8 +1,7 @@
 """
 Text Analysis Service
-Runs RoBERTa + LinguaForge-X ensemble for AI text detection and fake news classification.
-When trained models are available, loads them from models/ directory.
-Falls back to realistic mock inference for demo purposes.
+Runs Desklib's AI text detector for AI-generated text detection and keeps the
+existing fake-news classifier path separate.
 """
 import asyncio
 import time
@@ -15,19 +14,46 @@ from typing import List, Dict, Any
 # ── Try importing ML libraries (graceful fallback if not installed) ────────────
 try:
     import torch
-    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    from transformers import (
+        AutoConfig,
+        AutoModel,
+        AutoModelForSequenceClassification,
+        AutoTokenizer,
+        PreTrainedModel,
+    )
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "saved")
+DESKLIB_MODEL_ID = os.getenv("DESKLIB_MODEL_ID", "desklib/ai-text-detector-v1.01")
 ROBERTA_PATH = os.path.join(MODEL_DIR, "roberta_ai_detector")
 LINGUA_PATH = os.path.join(MODEL_DIR, "linguaforge_detector")
 FAKENEWS_PATH = os.path.join(MODEL_DIR, "fakenews_classifier")
 
 
+if TORCH_AVAILABLE:
+    class DesklibAIDetectionModel(PreTrainedModel):
+        config_class = AutoConfig
+
+        def __init__(self, config):
+            super().__init__(config)
+            self.model = AutoModel.from_config(config)
+            self.classifier = torch.nn.Linear(config.hidden_size, 1)
+            self.post_init()
+
+        def forward(self, input_ids, attention_mask=None, **kwargs):
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            hidden_state = outputs.last_hidden_state
+            mask = attention_mask.unsqueeze(-1).expand(hidden_state.size()).float()
+            pooled = (hidden_state * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+            return {"logits": self.classifier(pooled)}
+
+
 class TextAnalysisService:
     def __init__(self):
+        self.desklib_model = None
+        self.desklib_tokenizer = None
         self.roberta_model = None
         self.roberta_tokenizer = None
         self.lingua_model = None
@@ -37,12 +63,22 @@ class TextAnalysisService:
         self._load_models()
 
     def _load_models(self):
-        """Load saved models if available, else use mock inference."""
+        """Load the Desklib detector and optional fake-news model."""
         if not TORCH_AVAILABLE:
-            print("[TextService] PyTorch not available — using mock inference.")
+            print("[TextService] PyTorch/Transformers unavailable — AI detection is unavailable.")
             return
 
         try:
+            print(f"[TextService] Loading Desklib model: {DESKLIB_MODEL_ID}")
+            self.desklib_tokenizer = AutoTokenizer.from_pretrained(DESKLIB_MODEL_ID)
+            config = AutoConfig.from_pretrained(DESKLIB_MODEL_ID)
+            self.desklib_model = DesklibAIDetectionModel.from_pretrained(
+                DESKLIB_MODEL_ID,
+                config=config,
+            )
+            self.desklib_model.eval()
+            print("[TextService] Desklib AI detector loaded.")
+
             if os.path.exists(ROBERTA_PATH):
                 self.roberta_tokenizer = AutoTokenizer.from_pretrained(ROBERTA_PATH)
                 self.roberta_model = AutoModelForSequenceClassification.from_pretrained(ROBERTA_PATH)
@@ -61,10 +97,12 @@ class TextAnalysisService:
                 self.fakenews_model.eval()
                 print("[TextService] Fake news model loaded.")
         except Exception as e:
-            print(f"[TextService] Model load error: {e} — using mock inference.")
+            self.desklib_model = None
+            self.desklib_tokenizer = None
+            print(f"[TextService] Model load error: {e}")
 
     def _infer_model(self, model, tokenizer, text: str, max_length: int = 512) -> float:
-        """Run single model inference and return AI probability."""
+        """Run a two-class classifier and return its AI probability."""
         inputs = tokenizer(
             text, return_tensors="pt", truncation=True,
             max_length=max_length, padding=True
@@ -74,6 +112,19 @@ class TextAnalysisService:
         probs = torch.softmax(logits, dim=-1)
         # Assume label 1 = AI Generated
         return float(probs[0][1])
+
+    def _infer_desklib(self, text: str) -> float:
+        """Run Desklib's single-logit detector and return AI probability."""
+        inputs = self.desklib_tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512,
+            padding=True,
+        )
+        with torch.no_grad():
+            logits = self.desklib_model(**inputs)["logits"]
+        return float(torch.sigmoid(logits).flatten()[0])
 
     def _mock_inference(self, text: str) -> Dict[str, Any]:
         """Use the trained fast model instead of mock logic if available."""
@@ -141,23 +192,17 @@ class TextAnalysisService:
         """Full ensemble AI text detection pipeline."""
         t0 = time.time()
 
-        # Run inference
-        if self.roberta_model and self.lingua_model:
+        # Desklib is the source of truth for AI-generated text detection.
+        if self.desklib_model and self.desklib_tokenizer:
             loop = asyncio.get_event_loop()
-            roberta_score = await loop.run_in_executor(
-                None, self._infer_model, self.roberta_model, self.roberta_tokenizer, text)
-            lingua_score = await loop.run_in_executor(
-                None, self._infer_model, self.lingua_model, self.lingua_tokenizer, text)
+            desklib_score = await loop.run_in_executor(None, self._infer_desklib, text)
         else:
-            await asyncio.sleep(0.3)  # Simulate latency
-            scores = self._mock_inference(text)
-            roberta_score = scores["roberta"]
-            lingua_score = scores["linguaforge"]
+            raise RuntimeError(
+                "Desklib AI detector is unavailable. Install the backend ML dependencies "
+                "and ensure the model can be downloaded from Hugging Face."
+            )
 
-        # Weighted ensemble fusion
-        ROBERTA_WEIGHT = 0.55
-        LINGUA_WEIGHT = 0.45
-        ensemble_score = (roberta_score * ROBERTA_WEIGHT) + (lingua_score * LINGUA_WEIGHT)
+        ensemble_score = desklib_score
         human_score = 1.0 - ensemble_score
 
         # Fake news score
@@ -183,15 +228,11 @@ class TextAnalysisService:
             "human_confidence": round(human_score, 4),
             "fake_news_score": round(fake_score, 4),
             "real_news_score": round(real_score, 4),
-            "roberta": {
-                "prediction": "AI Generated" if roberta_score > 0.5 else "Human Written",
-                "ai_confidence": round(roberta_score, 4),
+            "desklib": {
+                "prediction": "AI Generated" if desklib_score > 0.5 else "Human Written",
+                "ai_confidence": round(desklib_score, 4),
             },
-            "linguaforge": {
-                "prediction": "AI Generated" if lingua_score > 0.5 else "Human Written",
-                "ai_confidence": round(lingua_score, 4),
-            },
-            "ensemble_weight": {"roberta": ROBERTA_WEIGHT, "linguaforge": LINGUA_WEIGHT},
+            "ensemble_weight": {"desklib": 1.0},
             "token_importance": token_importance,
             "shap_values": shap_values,
             "suspicious_phrases": suspicious,

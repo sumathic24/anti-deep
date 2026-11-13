@@ -7,7 +7,8 @@ pillow==10.3.0
 numpy==1.26.4
 torch==2.2.2
 torchvision==0.17.2
-transformers==4.40.0
+transformers==4.48.2
+sentencepiece==0.2.0
 scikit-learn==1.4.2
 scipy==1.13.0
 shap==0.45.0
