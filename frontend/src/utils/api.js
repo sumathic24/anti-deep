@@ -28,6 +28,16 @@ export const analyzeImage = async (file) => {
   return res.data
 }
 
+export const analyzeVideo = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post('/api/video/analyze', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 180000,
+  })
+  return res.data
+}
+
 // ── Dashboard Stats ───────────────────────────────────────────
 export const getDashboardStats = async () => {
   const res = await api.get('/api/stats')

@@ -5,6 +5,7 @@ import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import TextAnalysis from './pages/TextAnalysis'
 import ImageAnalysis from './pages/ImageAnalysis'
+import VideoAnalysis from './pages/VideoAnalysis'
 import About from './pages/About'
 import Footer from './components/Footer'
 
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/text-analysis" element={<TextAnalysis />} />
             <Route path="/image-analysis" element={<ImageAnalysis />} />
+            <Route path="/video-analysis" element={<VideoAnalysis />} />
             <Route path="/about" element={<About />} />
           </Routes>
         </AnimatePresence>

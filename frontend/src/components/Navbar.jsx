@@ -8,6 +8,7 @@ const navLinks = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Text Analysis', path: '/text-analysis' },
   { label: 'Image Analysis', path: '/image-analysis' },
+  { label: 'Video Analysis', path: '/video-analysis' },
   { label: 'About', path: '/about' },
 ]
 
