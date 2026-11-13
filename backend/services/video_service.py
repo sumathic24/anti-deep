@@ -43,10 +43,15 @@ class VideoAnalysisService:
         if self.detector is None:
             raise RuntimeError("The video detector is not available. Download the configured checkpoint first.")
         started = time.perf_counter()
-        ai_confidence = self.detector.predict_frames(self._sample_frames(filepath))
+        ai_confidence, explainability_regions = self.detector.predict_frames(self._sample_frames(filepath))
         return {
             "prediction": "AI-generated video" if ai_confidence > 0.5 else "Real video",
             "ai_confidence": ai_confidence,
             "model_used": f"{self.detector.model_id} (ConvNeXt frame sampler)",
+            "gradcam_regions": explainability_regions,
+            "explainability": {
+                "method": "frame-level saliency",
+                "regions": explainability_regions,
+            },
             "processing_time_ms": round((time.perf_counter() - started) * 1000),
         }

@@ -14,14 +14,19 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+import cv2
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 from PIL import Image
-from transformers import (AutoConfig, AutoModel, AutoModelForImageClassification,
+from transformers import (AutoConfig, AutoImageProcessor, AutoModel, AutoModelForImageClassification,
                           AutoModelForSequenceClassification, AutoTokenizer, PreTrainedModel)
 from transformers.utils import cached_file
 
-DEFAULT_TEXT_MODEL = "Oxidane/tmr-ai-text-detector"
-DEFAULT_IMAGE_MODEL = "haywoodsloan/ai-image-detector-deploy"
-DEFAULT_VIDEO_MODEL = "ducbao210/video-deepfake-detection"
+DEFAULT_TEXT_MODEL = "desklib/ai-text-detector-v1.01"
+DEFAULT_IMAGE_MODEL = "dima806/deepfake_vs_real_image_detection"
+DEFAULT_VIDEO_MODEL = "DarkVision/Deepfake_detection_video"
 BATCH_SIZE = 16
 
 # Label names that mean "AI-generated" in the models' id2label
@@ -128,49 +133,51 @@ class ImageDetector:
         self.model_id = model_id
         source = model_source(model_id)
         try:
-            self.model = AutoModelForImageClassification.from_pretrained(source, local_files_only=True).eval()
-            with open(cached_file(source, "preprocessor_config.json", local_files_only=True)) as f:
-                prep = json.load(f)
+            self.processor = AutoImageProcessor.from_pretrained(source)
+            self.model = AutoModelForImageClassification.from_pretrained(source).eval()
         except OSError as e:
             raise NotDownloadedError(model_id) from e
         config = self.model.config
         self.single_logit = config.num_labels == 1
         self.ai_index = ai_label_index(config)
+        self.fake_index = int(config.label2id.get("Fake", self.ai_index))
+        self.target_layer = self.model.vit.encoder.layer[-1].layernorm_after
 
-        self.size = prep.get("size", {"height": 224, "width": 224})
-        if isinstance(self.size, int):
-            self.size = {"shortest_edge": self.size}
-        crop = prep.get("crop_size")
-        self.crop = (crop["height"], crop["width"]) if isinstance(crop, dict) else (crop, crop) if crop else None
-        self.do_crop = prep.get("do_center_crop", False) and self.crop is not None
-        self.resample = Image.Resampling(prep.get("resample", Image.Resampling.BICUBIC))
-        self.rescale = prep.get("rescale_factor", 1 / 255)
-        self.mean = np.array(prep.get("image_mean", [0.5, 0.5, 0.5]), dtype=np.float32)
-        self.std = np.array(prep.get("image_std", [0.5, 0.5, 0.5]), dtype=np.float32)
+    def _inputs(self, img: Image.Image):
+        return self.processor(images=img.convert("RGB"), return_tensors="pt")
 
-    def _preprocess(self, img: Image.Image) -> torch.Tensor:
-        img = img.convert("RGB")
-        w, h = img.size
-        if "shortest_edge" in self.size:
-            scale = self.size["shortest_edge"] / min(w, h)
-            img = img.resize((max(1, round(w * scale)), max(1, round(h * scale))), self.resample)
-        else:
-            img = img.resize((self.size["width"], self.size["height"]), self.resample)
-        if self.do_crop:
-            ch, cw = self.crop
-            left, top = (img.width - cw) // 2, (img.height - ch) // 2
-            img = img.crop((left, top, left + cw, top + ch))
-        arr = (np.asarray(img, dtype=np.float32) * self.rescale - self.mean) / self.std
-        return torch.from_numpy(arr.transpose(2, 0, 1)).unsqueeze(0)
+    def predict_with_gradcam(self, filepath: str):
+        with Image.open(filepath) as img:
+            inputs = self._inputs(img)
+        self.model.zero_grad(set_to_none=True)
+        activations = []
+        gradients = []
+        self.target_layer.register_forward_hook(lambda _, __, output: activations.append(output))
+        self.target_layer.register_full_backward_hook(lambda _, __, output: gradients.append(output[0]))
+        logits = self.model(**inputs).logits
+        score = torch.sigmoid(logits[0, 0]) if self.single_logit else torch.softmax(logits, dim=-1)[0, self.fake_index]
+        score.backward()
+        if not activations or not gradients:
+            return float(score.detach()), []
+        activation = activations[0].detach()[0, 1:]
+        gradient = gradients[0].detach()[0, 1:]
+        weights = gradient.mean(dim=-1, keepdim=True)
+        cam = torch.relu((activation * weights).sum(dim=-1))
+        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+        grid = int(cam.numel() ** 0.5)
+        heatmap = cam.reshape(grid, grid).cpu().numpy()
+        regions = []
+        for y, x in zip(*np.where((heatmap >= np.quantile(heatmap, 0.85)) & (heatmap > 0))):
+            regions.append({
+                "x": round(x / grid * 100, 1), "y": round(y / grid * 100, 1),
+                "w": round(100 / grid, 1), "h": round(100 / grid, 1),
+                "intensity": round(float(heatmap[y, x]), 3),
+                "label": "ViT Grad-CAM patch",
+            })
+        return float(score.detach()), regions[:8]
 
     def predict(self, filepath: str) -> float:
-        with Image.open(filepath) as img:
-            pixels = self._preprocess(img)
-        with torch.no_grad():
-            logits = self.model(pixel_values=pixels).logits
-        if self.single_logit:
-            return float(torch.sigmoid(logits[0, 0]))
-        return float(torch.softmax(logits, dim=-1)[0, self.ai_index])
+        return self.predict_with_gradcam(filepath)[0]
 
 
 class _VideoLayerNorm(nn.Module):
@@ -238,39 +245,48 @@ class VideoConvNeXt(nn.Module):
 
 
 class VideoDetector:
-    """Frame-level adapter for the ConvNeXt checkpoint published by the video model."""
+    """Frame-level adapter for DarkVision's published Keras detector."""
 
     def __init__(self, model_id: str):
+        if tf is None:
+            raise RuntimeError("TensorFlow is required for the DarkVision video detector.")
         self.model_id = model_id
-        self.checkpoint_url = (
-            "https://huggingface.co/ducbao210/video-deepfake-detection/"
-            "resolve/main/checkpoints/convnext/best.pth"
-        )
         source = model_path(model_id)
-        checkpoint = os.path.join(source, "convnext-best.pth")
-        if not os.path.isfile(checkpoint):
-            raise NotDownloadedError(model_id)
+        saved_model = os.path.join(source, "p1")
         try:
-            self.model = VideoConvNeXt()
-            state = torch.load(checkpoint, map_location="cpu")
-            state = state.get("model_state_dict", state.get("state_dict", state))
-            self.model.load_state_dict(state, strict=True)
-            self.model.eval()
-            self.size = {"height": 224, "width": 224}
-            self.crop = None
-            self.do_crop = False
-            self.resample = Image.Resampling.BICUBIC
-            self.rescale = 1 / 255
-            self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-            self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-        except (OSError, RuntimeError, KeyError, TypeError) as e:
-            raise RuntimeError(f"Could not load video checkpoint {checkpoint}: {e}") from e
+            if not os.path.isdir(saved_model):
+                from huggingface_hub import snapshot_download
+                snapshot_download(model_id, allow_patterns=["p1/*"], local_dir=source)
+            self.model = tf.saved_model.load(saved_model)
+            self.infer = self.model.signatures["serving_default"]
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise RuntimeError(f"Could not load video checkpoint {saved_model}: {exc}") from exc
+        self.face_detector = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
 
-    def predict_frames(self, frames) -> float:
-        pixels = torch.stack([ImageDetector._preprocess(self, frame).squeeze(0) for frame in frames])
-        with torch.no_grad():
-            logits = self.model(pixels)
-        return float(torch.softmax(logits, dim=-1)[:, 1].mean())
+    def _face_or_frame(self, frame: Image.Image) -> np.ndarray:
+        image = np.asarray(frame.convert("RGB"))
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        faces = self.face_detector.detectMultiScale(gray, 1.1, 5)
+        if len(faces):
+            x, y, w, h = max(faces, key=lambda box: box[2] * box[3])
+            image = image[y:y + h, x:x + w]
+        return cv2.resize(image, (224, 224)).astype(np.float32) / 255.0
+
+    def predict_frames(self, frames):
+        batch = np.stack([self._face_or_frame(frame) for frame in frames])
+        predictions = self.infer(input_2=tf.convert_to_tensor(batch))["prediction"].numpy()
+        scores = predictions[:, 1] if predictions.shape[-1] > 1 else predictions[:, 0]
+        frame_scores = [round(float(score), 4) for score in scores]
+        score = float(np.mean(scores))
+        regions = [
+            {"x": round(index / max(len(scores), 1) * 100, 1), "y": 5,
+             "w": round(100 / max(len(scores), 1), 1), "h": 90,
+             "intensity": value, "label": "Deepfake frame signal"}
+            for index, value in enumerate(frame_scores) if value >= 0.5
+        ][:8]
+        return score, regions
 
 
 def load_detector(cls, model_id, service_name):
