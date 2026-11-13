@@ -1,73 +1,38 @@
-import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
-import { MotionConfig } from 'framer-motion'
-import { Loader2 } from 'lucide-react'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import Navbar from './components/Navbar'
-import Footer from './components/Footer'
 import Landing from './pages/Landing'
-import { ThemeProvider } from './utils/theme'
-import { ApiStatusProvider } from './utils/apiStatus'
-
-// Pages other than the landing page load on demand to keep the first download small.
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const TextAnalysis = lazy(() => import('./pages/TextAnalysis'))
-const ImageAnalysis = lazy(() => import('./pages/ImageAnalysis'))
-const VideoAnalysis = lazy(() => import('./pages/VideoAnalysis'))
-const About = lazy(() => import('./pages/About'))
-const NotFound = lazy(() => import('./pages/NotFound'))
-
-/** Scroll to the top on navigation, or to #section when the link has a hash. */
-function ScrollManager() {
-  const { pathname, hash } = useLocation()
-  useEffect(() => {
-    if (!hash) { window.scrollTo(0, 0); return }
-    // Lazy pages render a moment later, so retry briefly until the target exists.
-    let tries = 0
-    const timer = setInterval(() => {
-      const el = document.getElementById(hash.slice(1))
-      if (el || ++tries > 20) {
-        clearInterval(timer)
-        el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }
-    }, 100)
-    return () => clearInterval(timer)
-  }, [pathname, hash])
-  return null
-}
-
-function PageFallback() {
-  return (
-    <main className="flex flex-1 items-center justify-center py-32">
-      <Loader2 size={24} className="animate-spin text-fg-3" aria-label="Loading page" />
-    </main>
-  )
-}
+import Dashboard from './pages/Dashboard'
+import TextAnalysis from './pages/TextAnalysis'
+import ImageAnalysis from './pages/ImageAnalysis'
+import About from './pages/About'
+import Footer from './components/Footer'
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ApiStatusProvider>
-        <Router>
-          <MotionConfig reducedMotion="user">
-            <ScrollManager />
-            <div className="flex min-h-screen flex-col">
-              <Navbar />
-              <Suspense fallback={<PageFallback />}>
-                <Routes>
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/text-analysis" element={<TextAnalysis />} />
-                  <Route path="/image-analysis" element={<ImageAnalysis />} />
-                  <Route path="/video-analysis" element={<VideoAnalysis />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-              <Footer />
-            </div>
-          </MotionConfig>
-        </Router>
-      </ApiStatusProvider>
-    </ThemeProvider>
+    <Router>
+      <div className="min-h-screen bg-dark-950 relative overflow-x-hidden">
+        {/* Global background orbs */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+          <div className="orb-cyan" style={{ top: '-200px', left: '-100px' }} />
+          <div className="orb-violet" style={{ top: '200px', right: '-200px' }} />
+          <div className="orb-cyan" style={{ bottom: '-100px', left: '40%' }} />
+        </div>
+
+        <Navbar />
+
+        <AnimatePresence mode="wait">
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/text-analysis" element={<TextAnalysis />} />
+            <Route path="/image-analysis" element={<ImageAnalysis />} />
+            <Route path="/about" element={<About />} />
+          </Routes>
+        </AnimatePresence>
+
+        <Footer />
+      </div>
+    </Router>
   )
 }

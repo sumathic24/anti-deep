@@ -1,8 +1,8 @@
-node_modules/
+﻿venv/
+.venv/
+backend/venv/
 __pycache__/
 *.pyc
 .env
+node_modules/
 .vscode/
-venv/
-backend/data/
-backend/models/pretrained/

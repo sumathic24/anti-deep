@@ -1,22 +1,32 @@
-from fastapi import APIRouter, Query
-from services.history import history
+from fastapi import APIRouter
+import random
 
 router = APIRouter()
 
 
 @router.get("/stats")
-async def get_stats(days: int = Query(7, ge=1, le=90)):
-    """Dashboard statistics for the last `days` days, from the recorded analysis history."""
-    return history.stats(days)
-
-
-@router.get("/history")
-async def list_history(limit: int = Query(10, ge=1, le=100), offset: int = Query(0, ge=0)):
-    """Recorded analyses, newest first."""
-    return history.list(limit, offset)
-
-
-@router.delete("/history")
-async def clear_history():
-    """Delete every recorded analysis."""
-    return {"deleted": history.clear()}
+async def get_stats():
+    """Dashboard statistics."""
+    return {
+        "total_analyses": 1247,
+        "ai_content_detected": 847,
+        "avg_confidence": 91.3,
+        "verified_real": 400,
+        "text_analyses": 892,
+        "image_analyses": 355,
+        "weekly": [
+            {"day": "Mon", "text": 42, "image": 18},
+            {"day": "Tue", "text": 67, "image": 32},
+            {"day": "Wed", "text": 55, "image": 25},
+            {"day": "Thu", "text": 89, "image": 41},
+            {"day": "Fri", "text": 73, "image": 38},
+            {"day": "Sat", "text": 94, "image": 52},
+            {"day": "Sun", "text": 81, "image": 44},
+        ],
+        "breakdown": {
+            "ai_text": 38,
+            "fake_news": 27,
+            "ai_image": 21,
+            "human_content": 14,
+        },
+    }

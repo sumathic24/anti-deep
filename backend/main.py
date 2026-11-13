@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-from routers import text, image, video, stats
+from routers import text, image, stats
 
 app = FastAPI(
     title="DeepFakeShield API",
@@ -24,7 +24,6 @@ os.makedirs("uploads", exist_ok=True)
 
 app.include_router(text.router, prefix="/api/text", tags=["Text Analysis"])
 app.include_router(image.router, prefix="/api/image", tags=["Image Analysis"])
-app.include_router(video.router, prefix="/api/video", tags=["Video Analysis"])
 app.include_router(stats.router, prefix="/api", tags=["Stats"])
 
 
