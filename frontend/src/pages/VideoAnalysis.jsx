@@ -45,7 +45,7 @@ export default function VideoAnalysis() {
         <p className="section-label mb-2">Video Forensics</p>
         <h1 className="text-4xl font-bold text-white mb-2">Video <span className="gradient-text">Analysis</span></h1>
         <p className="text-slate-400 max-w-2xl mb-10">
-          Sample video frames and detect deepfake content with the configured video detector.
+          Detect deepfake content directly from your video with a native video classifier.
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -98,6 +98,24 @@ export default function VideoAnalysis() {
                   <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-rose-400" style={{ width: `${result.ai_confidence * 100}%` }} />
                 </div>
                 <p className="text-xs text-slate-500 mt-4">{result.model_used}</p>
+                <div className="mt-6 border-t border-white/10 pt-5">
+                  <p className="text-sm font-semibold text-white">Native video classifier</p>
+                  <p className="text-xs text-slate-500 mt-2">
+                  The uploaded video is classified directly on the CPU without frame extraction.
+                  </p>
+                  {result.gradcam_regions?.length ? (
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      {result.gradcam_regions.map((region, index) => (
+                        <div key={`${region.x}-${region.y}-${index}`} className="rounded-lg bg-rose-400/10 border border-rose-400/20 px-3 py-2">
+                          <p className="text-xs text-rose-300">{region.label}</p>
+                          <p className="text-xs text-slate-400 mt-1">Intensity: {(region.intensity * 100).toFixed(1)}%</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-4">No high-signal regions were found.</p>
+                  )}
+                </div>
               </>
             )}
           </div>

@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import cv2
 import numpy as np
@@ -16,7 +16,8 @@ class VideoAnalysisService:
     def __init__(self):
         self.detector = load_detector(VideoDetector, VIDEO_MODEL_ID, "VideoService")
 
-    def _sample_frames(self, filepath: str):
+    @staticmethod
+    def _sample_frames(filepath: str):
         capture = cv2.VideoCapture(filepath)
         if not capture.isOpened():
             raise ValueError("The uploaded file is not a readable video.")
@@ -43,10 +44,27 @@ class VideoAnalysisService:
         if self.detector is None:
             raise RuntimeError("The video detector is not available. Download the configured checkpoint first.")
         started = time.perf_counter()
-        ai_confidence = self.detector.predict_frames(self._sample_frames(filepath))
+        ai_confidence, explainability_regions = self.detector.predict_frames(
+            self._sample_frames(filepath)
+        )
         return {
             "prediction": "AI-generated video" if ai_confidence > 0.5 else "Real video",
             "ai_confidence": ai_confidence,
-            "model_used": f"{self.detector.model_id} (ConvNeXt frame sampler)",
+            "model_used": self.detector.model_id,
+            "gradcam_regions": explainability_regions,
+            "explainability": {
+                "method": "AEGIS frame-level branch saliency",
+                "regions": explainability_regions,
+            },
             "processing_time_ms": round((time.perf_counter() - started) * 1000),
         }
+
+
+def check_video(video_path: str) -> Tuple[str, float]:
+    """Classify a video file using the configured detector."""
+    if not os.path.isfile(video_path):
+        raise ValueError(f"Video file does not exist: {video_path}")
+    service = VideoAnalysisService()
+    result = service.detector.predict_frames(service._sample_frames(video_path))
+    score = float(result[0])
+    return ("FAKE" if score > 0.5 else "REAL"), (score if score > 0.5 else 1.0 - score)

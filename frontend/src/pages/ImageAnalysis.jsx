@@ -8,24 +8,6 @@ const fadeUp = {
   show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.5, delay: i * 0.08 } }),
 }
 
-function generateMockImageResult() {
-  const aiScore = Math.random() * 0.85 + 0.1; // 0.10 to 0.95
-  return {
-    prediction: aiScore > 0.65 ? 'AI Generated' : 'Real Image',
-    ai_confidence: parseFloat(aiScore.toFixed(4)),
-    real_confidence: parseFloat((1 - aiScore).toFixed(4)),
-    efficientnet: { prediction: aiScore > 0.65 ? 'AI Generated' : 'Real', confidence: parseFloat(Math.min(Math.max(aiScore + Math.random() * 0.08 - 0.04, 0.05), 0.99).toFixed(4)) },
-    vit: { prediction: aiScore > 0.65 ? 'AI Generated' : 'Real', confidence: parseFloat(Math.min(Math.max(aiScore + Math.random() * 0.08 - 0.04, 0.05), 0.99).toFixed(4)) },
-    gradcam_regions: [
-      { x: 15, y: 20, w: 30, h: 25, intensity: 0.9, label: 'Face region' },
-      { x: 55, y: 10, w: 25, h: 30, intensity: 0.7, label: 'BG artifact' },
-      { x: 25, y: 55, w: 20, h: 20, intensity: 0.6, label: 'Texture issue' },
-    ],
-    artifacts_detected: ['GAN frequency artifacts', 'Unnatural skin texture', 'Eye reflection mismatch'].slice(0, Math.floor(Math.random() * 3) + 1),
-    processing_time_ms: Math.floor(Math.random() * 1200 + 600),
-  }
-}
-
 function ConfidenceBar({ value, color, label }) {
   return (
     <div className="mb-3">
@@ -84,6 +66,7 @@ export default function ImageAnalysis() {
   const [preview, setPreview] = useState(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
   const [showGradcam, setShowGradcam] = useState(true)
   const [showModels, setShowModels] = useState(true)
   const [dragOver, setDragOver] = useState(false)
@@ -91,7 +74,7 @@ export default function ImageAnalysis() {
 
   const handleFile = useCallback((f) => {
     if (!f || !f.type.startsWith('image/')) return
-    setFile(f); setResult(null)
+    setFile(f); setResult(null); setError('')
     const reader = new FileReader()
     reader.onload = (e) => setPreview(e.target.result)
     reader.readAsDataURL(f)
@@ -99,13 +82,12 @@ export default function ImageAnalysis() {
 
   const handleAnalyze = async () => {
     if (!file) return
-    setLoading(true); setResult(null)
+    setLoading(true); setResult(null); setError('')
     try {
       const data = await analyzeImage(file)
       setResult(data)
-    } catch {
-      await new Promise(r => setTimeout(r, 1500))
-      setResult(generateMockImageResult())
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Image analysis failed. Please try again.')
     } finally { setLoading(false) }
   }
 
@@ -118,7 +100,7 @@ export default function ImageAnalysis() {
         <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0} className="mb-10">
           <p className="section-label mb-2">Computer Vision</p>
           <h1 className="text-4xl font-bold text-white mb-2">Image <span className="gradient-text">Analysis</span></h1>
-          <p className="text-slate-400 max-w-2xl">Detect AI-generated images using EfficientNet + ViT ensemble. GradCAM heatmaps reveal manipulated regions inline with every prediction.</p>
+          <p className="text-slate-400 max-w-2xl">Detect AI-generated images using the xRayon ConvNeXt detector. Grad-CAM heatmaps reveal regions that influenced the prediction.</p>
         </motion.div>
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -209,13 +191,18 @@ export default function ImageAnalysis() {
                       <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
                     </div>
                   </div>
-                  <p className="text-white font-semibold">Running Vision Models</p>
-                  <p className="text-slate-500 text-sm mt-1">EfficientNet + ViT + GradCAM…</p>
+                  <p className="text-white font-semibold">Running Vision Model</p>
+                  <p className="text-slate-500 text-sm mt-1">xRayon ConvNeXt + Grad-CAM…</p>
                   <div className="w-48 h-1 bg-white/5 rounded-full mt-6 overflow-hidden">
                     <motion.div className="h-full bg-cyan-400 rounded-full"
                       animate={{ x: ['-100%', '200%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }} />
                   </div>
                 </motion.div>
+              )}
+              {error && !loading && (
+                <div className="card border border-rose-400/30 text-rose-300 text-sm">
+                  {error}
+                </div>
               )}
               {result && (
                 <motion.div key="result" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
@@ -232,7 +219,7 @@ export default function ImageAnalysis() {
                           </div>
                           <div>
                             <h2 className="text-2xl font-black text-white">{result.prediction}</h2>
-                            <p className="text-xs text-slate-400">{result.processing_time_ms}ms · EfficientNet+ViT</p>
+                            <p className="text-xs text-slate-400">{result.processing_time_ms}ms · {result.model_used}</p>
                           </div>
                         </div>
                       </div>
@@ -267,7 +254,7 @@ export default function ImageAnalysis() {
                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                           <p className="text-xs text-slate-500 mt-4 mb-4">Red heatmap regions indicate detected AI-generation artifacts. Higher intensity = stronger signal.</p>
-                          {preview && <GradCAMOverlay imageUrl={preview} regions={result.gradcam_regions} />}
+                          {preview && <GradCAMOverlay imageUrl={preview} regions={result.gradcam_regions || []} />}
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -276,16 +263,15 @@ export default function ImageAnalysis() {
                   <div className="card">
                     <button onClick={() => setShowModels(!showModels)}
                       className="w-full flex items-center justify-between text-sm font-semibold text-white">
-                      <span className="flex items-center gap-2"><Eye size={15} className="text-violet-400" /> EfficientNet vs ViT</span>
+                      <span className="flex items-center gap-2"><Eye size={15} className="text-violet-400" /> Model details</span>
                       {showModels ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                     </button>
                     <AnimatePresence>
                       {showModels && (
                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                          <div className="grid grid-cols-2 gap-4 mt-5">
-                            {[{ model: 'EfficientNet-B4', data: result.efficientnet, color: '#22d3ee' },
-                              { model: 'ViT-B/16', data: result.vit, color: '#a78bfa' }].map(({ model, data, color }) => (
+                          <div className="grid grid-cols-1 gap-4 mt-5">
+                            {[{ model: 'xRayon ConvNeXt', data: result.vit, color: '#a78bfa' }].map(({ model, data, color }) => (
                               <div key={model} className="p-4 rounded-xl" style={{ background: `${color}08`, border: `1px solid ${color}20` }}>
                                 <p className="text-xs font-bold mb-2" style={{ color }}>{model}</p>
                                 <p className="text-xl font-black text-white">{(data.confidence * 100).toFixed(1)}%</p>

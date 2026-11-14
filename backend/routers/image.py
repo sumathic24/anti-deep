@@ -26,6 +26,8 @@ async def analyze_image(file: UploadFile = File(...)):
 
     try:
         result = await service.analyze_image(filepath)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)

@@ -45,15 +45,21 @@ def main():
     if (both or args.image) and IMAGE_MODEL_ID:
         targets.append(("Image detector", IMAGE_MODEL_ID))
     if both or args.video:
-        targets.append(("Video detector", "ducbao210/video-deepfake-detection"))
+        targets.append(("Video detector", "MusapYildiz/aegis-video-detector"))
     if not targets:
         print("Nothing to download (the selected detectors are disabled).")
         return
 
     plan = []
     for label, model_id in targets:
-        if label == "Video detector":
-            plan.append((label, model_id, ["checkpoints/convnext/best.pth"], 0))
+        if model_id == "MusapYildiz/aegis-video-detector":
+            plan.append((label, model_id, ["checkpoint_best.pt"], 0))
+        elif model_id == "xRayon/convnext-ai-images-detector":
+            plan.append((label, model_id, [
+                "AI Images Detector/checkpoints/checkpoint_phase2.pth",
+                "AI Images Detector/model/convnext.py",
+                "AI Images Detector/transforms.py",
+            ], 0))
         else:
             plan.append((label, model_id, *files_to_download(model_id)))
     for label, model_id, files, size in plan:
@@ -63,14 +69,6 @@ def main():
         return
 
     for label, model_id, files, _ in plan:
-        if label == "Video detector":
-            from huggingface_hub import hf_hub_download
-            destination = os.path.join(model_path(model_id), "convnext-best.pth")
-            os.makedirs(os.path.dirname(destination), exist_ok=True)
-            print(f"\nDownloading {model_id} ConvNeXt checkpoint …")
-            hf_hub_download(model_id, "checkpoints/convnext/best.pth", local_dir=os.path.dirname(destination))
-            os.replace(os.path.join(os.path.dirname(destination), "checkpoints", "convnext", "best.pth"), destination)
-            continue
         print(f"\nDownloading {model_id} …")
         snapshot_download(model_id, allow_patterns=files, local_dir=model_path(model_id))
     print(f"\nDone. Models are stored in {PRETRAINED_DIR}\nRestart the backend to use them.")

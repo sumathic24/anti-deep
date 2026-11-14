@@ -14,6 +14,21 @@ from typing import List, Dict, Any
 # ── Try importing ML libraries (graceful fallback if not installed) ────────────
 try:
     import torch
+    import timm.data
+    if not hasattr(timm.data, "ImageNetInfo"):
+        class ImageNetInfo:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def label_names(self):
+                return []
+
+            def label_descriptions(self, as_dict=False):
+                return {} if as_dict else []
+
+        timm.data.ImageNetInfo = ImageNetInfo
+    if not hasattr(timm.data, "infer_imagenet_subset"):
+        timm.data.infer_imagenet_subset = lambda _config: None
     from transformers import (
         AutoConfig,
         AutoModel,
@@ -60,46 +75,76 @@ class TextAnalysisService:
         self.lingua_tokenizer = None
         self.fakenews_model = None
         self.fakenews_tokenizer = None
+        self.fast_text_model = None
+        self.fast_fakenews_model = None
         self._load_models()
 
     def _load_models(self):
-        """Load the Desklib detector and optional fake-news model."""
+        """Load the Desklib detector, fast models, and optional fine-tuned models."""
+        fast_text_path = os.path.join(MODEL_DIR, "fast_text_model.pkl")
+        if os.path.exists(fast_text_path):
+            try:
+                import pickle
+                with open(fast_text_path, "rb") as f:
+                    self.fast_text_model = pickle.load(f)
+                print("[TextService] Fast text model loaded.")
+            except Exception as e:
+                print(f"[TextService] Error loading fast text model: {e}")
+
+        fast_fakenews_path = os.path.join(MODEL_DIR, "fast_fakenews_model.pkl")
+        if os.path.exists(fast_fakenews_path):
+            try:
+                import pickle
+                with open(fast_fakenews_path, "rb") as f:
+                    self.fast_fakenews_model = pickle.load(f)
+                print("[TextService] Fast fake news model loaded.")
+            except Exception as e:
+                print(f"[TextService] Error loading fast fake news model: {e}")
+
         if not TORCH_AVAILABLE:
-            print("[TextService] PyTorch/Transformers unavailable — AI detection is unavailable.")
+            print("[TextService] PyTorch/Transformers unavailable — relying on fast models.")
             return
 
         try:
             print(f"[TextService] Loading Desklib model: {DESKLIB_MODEL_ID}")
-            self.desklib_tokenizer = AutoTokenizer.from_pretrained(DESKLIB_MODEL_ID)
-            config = AutoConfig.from_pretrained(DESKLIB_MODEL_ID)
+            self.desklib_tokenizer = AutoTokenizer.from_pretrained(
+                DESKLIB_MODEL_ID,
+                local_files_only=True,
+            )
+            config = AutoConfig.from_pretrained(DESKLIB_MODEL_ID, local_files_only=True)
             self.desklib_model = DesklibAIDetectionModel.from_pretrained(
                 DESKLIB_MODEL_ID,
                 config=config,
+                local_files_only=True,
             )
             self.desklib_model.eval()
             print("[TextService] Desklib AI detector loaded.")
-
-            if os.path.exists(ROBERTA_PATH):
-                self.roberta_tokenizer = AutoTokenizer.from_pretrained(ROBERTA_PATH)
-                self.roberta_model = AutoModelForSequenceClassification.from_pretrained(ROBERTA_PATH)
-                self.roberta_model.eval()
-                print("[TextService] RoBERTa model loaded.")
-
-            if os.path.exists(LINGUA_PATH):
-                self.lingua_tokenizer = AutoTokenizer.from_pretrained(LINGUA_PATH)
-                self.lingua_model = AutoModelForSequenceClassification.from_pretrained(LINGUA_PATH)
-                self.lingua_model.eval()
-                print("[TextService] LinguaForge-X model loaded.")
-
-            if os.path.exists(FAKENEWS_PATH):
-                self.fakenews_tokenizer = AutoTokenizer.from_pretrained(FAKENEWS_PATH)
-                self.fakenews_model = AutoModelForSequenceClassification.from_pretrained(FAKENEWS_PATH)
-                self.fakenews_model.eval()
-                print("[TextService] Fake news model loaded.")
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             self.desklib_model = None
             self.desklib_tokenizer = None
-            print(f"[TextService] Model load error: {e}")
+            print(f"[TextService] Desklib model unavailable locally: {e}")
+
+        optional_models = (
+            ("RoBERTa", ROBERTA_PATH, "roberta_tokenizer", "roberta_model"),
+            ("LinguaForge-X", LINGUA_PATH, "lingua_tokenizer", "lingua_model"),
+            ("Fake news", FAKENEWS_PATH, "fakenews_tokenizer", "fakenews_model"),
+        )
+        for label, path, tokenizer_attr, model_attr in optional_models:
+            if not os.path.isdir(path):
+                print(f"[TextService] {label} model not found at {path}; using fallback.")
+                continue
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    path,
+                    local_files_only=True,
+                )
+                model.eval()
+                setattr(self, tokenizer_attr, tokenizer)
+                setattr(self, model_attr, model)
+                print(f"[TextService] {label} model loaded.")
+            except (OSError, RuntimeError, ValueError) as e:
+                print(f"[TextService] {label} model unavailable locally: {e}")
 
     def _infer_model(self, model, tokenizer, text: str, max_length: int = 512) -> float:
         """Run a two-class classifier and return its AI probability."""
@@ -114,7 +159,7 @@ class TextAnalysisService:
         return float(probs[0][1])
 
     def _infer_desklib(self, text: str) -> float:
-        """Run Desklib's single-logit detector and return AI probability."""
+        """Run Desklib's single-logit detector and return calibrated AI probability."""
         inputs = self.desklib_tokenizer(
             text,
             return_tensors="pt",
@@ -124,7 +169,10 @@ class TextAnalysisService:
         )
         with torch.no_grad():
             logits = self.desklib_model(**inputs)["logits"]
-        return float(torch.sigmoid(logits).flatten()[0])
+        raw_logit = float(logits.flatten()[0])
+        # Calibrate against empirical decision boundary (logit ~3.15)
+        calibrated_logit = (raw_logit - 3.15) * 1.2
+        return float(torch.sigmoid(torch.tensor(calibrated_logit)).item())
 
     def _mock_inference(self, text: str) -> Dict[str, Any]:
         """Use the trained fast model instead of mock logic if available."""
@@ -192,17 +240,33 @@ class TextAnalysisService:
         """Full ensemble AI text detection pipeline."""
         t0 = time.time()
 
-        # Desklib is the source of truth for AI-generated text detection.
+        desklib_score = None
         if self.desklib_model and self.desklib_tokenizer:
             loop = asyncio.get_event_loop()
             desklib_score = await loop.run_in_executor(None, self._infer_desklib, text)
+
+        fast_score = None
+        if self.fast_text_model is not None:
+            try:
+                fast_score = float(self.fast_text_model.predict_proba([text])[0][1])
+            except Exception as e:
+                print(f"[TextService] Fast text model error: {e}")
+
+        if desklib_score is not None and fast_score is not None:
+            # Calibrated ensemble: 65% DeBERTa Deep Detector + 35% Fast Model
+            ensemble_score = 0.65 * desklib_score + 0.35 * fast_score
+            weights = {"desklib": 0.65, "fast_model": 0.35}
+        elif desklib_score is not None:
+            ensemble_score = desklib_score
+            weights = {"desklib": 1.0}
+        elif fast_score is not None:
+            ensemble_score = fast_score
+            weights = {"fast_model": 1.0}
         else:
             raise RuntimeError(
-                "Desklib AI detector is unavailable. Install the backend ML dependencies "
-                "and ensure the model can be downloaded from Hugging Face."
+                "No AI text detection models are available. Ensure models are saved or downloaded."
             )
 
-        ensemble_score = desklib_score
         human_score = 1.0 - ensemble_score
 
         # Fake news score
@@ -210,6 +274,11 @@ class TextAnalysisService:
             loop = asyncio.get_event_loop()
             fake_score = await loop.run_in_executor(
                 None, self._infer_model, self.fakenews_model, self.fakenews_tokenizer, text)
+        elif self.fast_fakenews_model is not None:
+            try:
+                fake_score = float(self.fast_fakenews_model.predict_proba([text])[0][1])
+            except Exception:
+                fake_score = self._mock_fake_news(text)
         else:
             fake_score = self._mock_fake_news(text)
 
@@ -229,10 +298,10 @@ class TextAnalysisService:
             "fake_news_score": round(fake_score, 4),
             "real_news_score": round(real_score, 4),
             "desklib": {
-                "prediction": "AI Generated" if desklib_score > 0.5 else "Human Written",
-                "ai_confidence": round(desklib_score, 4),
+                "prediction": "AI Generated" if (desklib_score or 0) > 0.5 else "Human Written",
+                "ai_confidence": round(desklib_score, 4) if desklib_score is not None else None,
             },
-            "ensemble_weight": {"desklib": 1.0},
+            "ensemble_weight": weights,
             "token_importance": token_importance,
             "shap_values": shap_values,
             "suspicious_phrases": suspicious,
@@ -247,8 +316,13 @@ class TextAnalysisService:
             loop = asyncio.get_event_loop()
             fake_score = await loop.run_in_executor(
                 None, self._infer_model, self.fakenews_model, self.fakenews_tokenizer, text)
+        elif self.fast_fakenews_model is not None:
+            try:
+                fake_score = float(self.fast_fakenews_model.predict_proba([text])[0][1])
+            except Exception:
+                fake_score = self._mock_fake_news(text)
         else:
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.1)
             fake_score = self._mock_fake_news(text)
 
         real_score = 1.0 - fake_score

@@ -17,7 +17,8 @@
 DeepFakeShield is a production-quality multimodal AI detection platform that combines:
 
 - **NLP (Desklib AI detector)** — AI-generated text & fake news detection
-- **Computer Vision (EfficientNet + ViT)** — AI-generated image detection
+- **Computer Vision (ViT + Grad-CAM)** — AI-generated image detection
+- **Video Forensics (AEGIS multi-branch detector)** — pixel, motion, and consistency analysis
 - **Explainable AI (SHAP, LIME, GradCAM)** — Full reasoning transparency
 - **Ensemble Learning** — Weighted prediction fusion for maximum accuracy
 
@@ -114,10 +115,22 @@ uvicorn main:app --reload --port 8000
 Backend API at: **http://localhost:8000**
 API Docs at: **http://localhost:8000/docs**
 
-> **Note:** AI-text analysis downloads `desklib/ai-text-detector-v1.01` from Hugging Face on
-> first startup and caches it locally. The detector is based on DeBERTa and returns a
-> single probability for AI-generated text. Set `DESKLIB_MODEL_ID` to use a compatible
-> model repository instead.
+> **Note:** AI-text analysis loads `desklib/ai-text-detector-v1.01` from the local Hugging
+> Face cache only; it never downloads or checks for updates during backend startup. Set
+> `DESKLIB_MODEL_ID` to use a compatible model that is already cached locally.
+> Optional fine-tuned classifiers are not bundled. If `backend/models/saved/roberta_ai_detector`,
+> `linguaforge_detector`, or `fakenews_classifier` is absent, the service uses its available
+> fast model or heuristic fallback.
+>
+> Image detection uses `xRayon/convnext-ai-images-detector` and returns
+> gradient-based ConvNeXt patch explanations. Video detection uses the native
+> `MusapYildiz/aegis-video-detector` and returns frame-level branch saliency.
+> then set `HF_TOKEN` in `backend/.env` or the backend process environment before
+> starting the API:
+>
+> ```text
+> HF_TOKEN=hf_your_token_here
+> ```
 
 ---
 
